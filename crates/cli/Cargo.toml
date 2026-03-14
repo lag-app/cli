@@ -1,0 +1,51 @@
+[package]
+name = "lag-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Terminal client for Lag voice chat"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "lag"
+path = "src/main.rs"
+
+[dependencies]
+lag-voice-core = { path = "../voice-core" }
+lag-common = { path = "../common" }
+clap = { version = "4", features = ["derive"] }
+ratatui = "0.29"
+crossterm = "0.28"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-native-roots"] }
+tiny_http = "0.12"
+open = "5"
+dirs = { workspace = true }
+chrono = { version = "0.4", features = ["serde"] }
+url = "2"
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+parking_lot = "0.12"
+futures-util = "0.3"
+rand = "0.8"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"
+cocoa = "0.26"
+
+[package.metadata.deb]
+maintainer = "Lag <hello@trylag.com>"
+copyright = "2026, Lag"
+depends = "$auto"
+section = "sound"
+priority = "optional"
+assets = [
+    ["target/release/lag", "usr/bin/", "755"],
+]

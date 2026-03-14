@@ -1,0 +1,30 @@
+[package]
+name = "lag-voice-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Platform-agnostic voice engine for Lag"
+
+[lints]
+workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+lag-common = { path = "../common" }
+
+cpal = "0.15"
+audiopus = "0.3.0-rc.0"
+nnnoiseless = "0.5"
+rdev = "0.5"
+parking_lot = "0.12"
+ringbuf = "0.4"
+livekit = { version = "0.7", features = ["native-tls"] }
+futures-util = "0.3"
+
+[dev-dependencies]
+tempfile = "3"

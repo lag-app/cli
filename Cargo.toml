@@ -1,0 +1,36 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/cli",
+  "crates/common",
+  "crates/voice-core",
+]
+
+[profile.dev]
+opt-level = 1
+
+[workspace.package]
+version = "0.0.6-alpha"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/lagchat/cli"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "5"
+
+[workspace.lints.rust]
+unused_imports = "deny"
+unused_variables = "deny"
+unused_mut = "deny"
+dead_code = "warn"
+
+# Fix audiopus_sys build with CMake 4.0+ (bundled Opus has old cmake_minimum_required)
+# See https://github.com/Lakelezz/audiopus_sys/issues/21 and PR #23
+[patch.crates-io]
+audiopus_sys = { git = "https://github.com/sevenc-nanashi/audiopus_sys", rev = "00e9d16" }
