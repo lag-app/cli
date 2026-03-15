@@ -88,7 +88,10 @@ mod tests {
     fn save_json_roundtrip() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("roundtrip.json");
-        let original = TestConfig { name: "test".into(), count: 42 };
+        let original = TestConfig {
+            name: "test".into(),
+            count: 42,
+        };
         save_json(&path, &original).unwrap();
         let loaded: TestConfig = load_json(&path);
         assert_eq!(original, loaded);

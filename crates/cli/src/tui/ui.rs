@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
+use super::app::{ActionMenu, App, FriendEntryKind, FriendPopup, SidebarSection, SidebarView};
+use super::theme;
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
-use super::app::{App, ActionMenu, FriendEntryKind, FriendPopup, SidebarSection, SidebarView};
-use super::theme;
 
 pub fn draw(f: &mut Frame, app: &App) {
     let size = f.area();
@@ -50,10 +50,7 @@ pub fn draw(f: &mut Frame, app: &App) {
     } else {
         Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length(26),
-                Constraint::Min(30),
-            ])
+            .constraints([Constraint::Length(26), Constraint::Min(30)])
             .split(content_area)
     };
 
@@ -131,16 +128,26 @@ fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
                 if i > 0 {
                     if let Some(ref detail) = app.selected_server {
                         let room_idx = i - 1;
-                        detail.rooms.get(room_idx)
+                        detail
+                            .rooms
+                            .get(room_idx)
                             .and_then(|r| r["id"].as_str())
                             .map(|id| app.selected_room_id.as_deref() == Some(id))
                             .unwrap_or(false)
-                    } else { false }
-                } else { false }
-            } else { false };
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
 
             let style = if is_selected {
-                Style::default().fg(theme::TEXT_PRIMARY).bg(theme::SURFACE_HOVER)
+                Style::default()
+                    .fg(theme::TEXT_PRIMARY)
+                    .bg(theme::SURFACE_HOVER)
             } else if is_active_room {
                 Style::default().fg(theme::ACCENT)
             } else if i == 0 && app.sidebar_view == SidebarView::RoomList {
@@ -170,18 +177,23 @@ fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(theme::TEXT_SECONDARY)
     };
 
-    let friend_items: Vec<ListItem> = app.friend_entries.iter().take(5).map(|entry| {
-        let color = match entry.kind {
-            FriendEntryKind::IncomingRequest => theme::WARNING,
-            FriendEntryKind::OutgoingRequest => theme::TEXT_MUTED,
-            FriendEntryKind::Friend => match entry.status.as_str() {
-                "online" => theme::SUCCESS,
-                "idle" => theme::WARNING,
-                _ => theme::TEXT_MUTED,
-            },
-        };
-        ListItem::new(format!(" {}", entry.label())).style(Style::default().fg(color))
-    }).collect();
+    let friend_items: Vec<ListItem> = app
+        .friend_entries
+        .iter()
+        .take(5)
+        .map(|entry| {
+            let color = match entry.kind {
+                FriendEntryKind::IncomingRequest => theme::WARNING,
+                FriendEntryKind::OutgoingRequest => theme::TEXT_MUTED,
+                FriendEntryKind::Friend => match entry.status.as_str() {
+                    "online" => theme::SUCCESS,
+                    "idle" => theme::WARNING,
+                    _ => theme::TEXT_MUTED,
+                },
+            };
+            ListItem::new(format!(" {}", entry.label())).style(Style::default().fg(color))
+        })
+        .collect();
 
     let friends = List::new(friend_items).block(
         Block::default()
@@ -206,29 +218,35 @@ fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(theme::TEXT_SECONDARY)
     };
 
-    let dm_items: Vec<ListItem> = app.dms.iter().take(5).map(|dm| {
-        let conv_id = dm["id"].as_str().unwrap_or("");
-        let name = dm["otherUser"]["displayName"].as_str()
-            .or_else(|| dm["otherUser"]["username"].as_str())
-            .unwrap_or("?");
-        let unread = app.dm_unread.get(conv_id).copied().unwrap_or(0);
-        let color = if unread > 0 {
-            theme::ACCENT
-        } else {
-            let status = dm["otherUser"]["status"].as_str().unwrap_or("offline");
-            match status {
-                "online" => theme::SUCCESS,
-                "idle" => theme::WARNING,
-                _ => theme::TEXT_MUTED,
-            }
-        };
-        let label = if unread > 0 {
-            format!(" ({}) {}", unread, name)
-        } else {
-            format!(" {}", name)
-        };
-        ListItem::new(label).style(Style::default().fg(color))
-    }).collect();
+    let dm_items: Vec<ListItem> = app
+        .dms
+        .iter()
+        .take(5)
+        .map(|dm| {
+            let conv_id = dm["id"].as_str().unwrap_or("");
+            let name = dm["otherUser"]["displayName"]
+                .as_str()
+                .or_else(|| dm["otherUser"]["username"].as_str())
+                .unwrap_or("?");
+            let unread = app.dm_unread.get(conv_id).copied().unwrap_or(0);
+            let color = if unread > 0 {
+                theme::ACCENT
+            } else {
+                let status = dm["otherUser"]["status"].as_str().unwrap_or("offline");
+                match status {
+                    "online" => theme::SUCCESS,
+                    "idle" => theme::WARNING,
+                    _ => theme::TEXT_MUTED,
+                }
+            };
+            let label = if unread > 0 {
+                format!(" ({}) {}", unread, name)
+            } else {
+                format!(" {}", name)
+            };
+            ListItem::new(label).style(Style::default().fg(color))
+        })
+        .collect();
 
     let dms = List::new(dm_items).block(
         Block::default()
@@ -265,14 +283,20 @@ const QUOTES: &[&str] = &[
 ];
 
 fn daily_quote() -> &'static str {
-    let day = chrono::Utc::now().format("%j").to_string().parse::<usize>().unwrap_or(0);
+    let day = chrono::Utc::now()
+        .format("%j")
+        .to_string()
+        .parse::<usize>()
+        .unwrap_or(0);
     QUOTES[day % QUOTES.len()]
 }
 
 fn draw_warp_screen(f: &mut Frame, status_msg: &str, area: Rect) {
     let w = area.width as usize;
     let h = area.height as usize;
-    if w == 0 || h == 0 { return; }
+    if w == 0 || h == 0 {
+        return;
+    }
 
     let cx = w / 2;
     let cy = h / 2;
@@ -305,9 +329,13 @@ fn draw_warp_screen(f: &mut Frame, status_msg: &str, area: Rect) {
 
         if ix < w && iy < h {
             let brightness = (40.0 + progress * 215.0) as u8;
-            let ch = if progress > 0.6 { '*' }
-                else if progress > 0.3 { '.' }
-                else { '·' };
+            let ch = if progress > 0.6 {
+                '*'
+            } else if progress > 0.3 {
+                '.'
+            } else {
+                '·'
+            };
             buf[iy][ix] = (ch, Color::Rgb(brightness, brightness, brightness));
         }
 
@@ -315,7 +343,9 @@ fn draw_warp_screen(f: &mut Frame, status_msg: &str, area: Rect) {
         if progress > 0.4 {
             for t_off in 1..=2 {
                 let trail_dist = dist - (t_off as f64 * 1.2);
-                if trail_dist < 0.0 { continue; }
+                if trail_dist < 0.0 {
+                    continue;
+                }
                 let trail_x = cx as f64 + angle.cos() * trail_dist * 2.0;
                 let trail_y = cy as f64 + angle.sin() * trail_dist;
                 let tix = trail_x as usize;
@@ -346,7 +376,9 @@ fn draw_warp_screen(f: &mut Frame, status_msg: &str, area: Rect) {
     let text_start_y = cy.saturating_sub(text_rows.len() / 2);
     for (row_offset, (text, color)) in text_rows.iter().enumerate() {
         let row_y = text_start_y + row_offset;
-        if row_y >= h || text.is_empty() { continue; }
+        if row_y >= h || text.is_empty() {
+            continue;
+        }
         let text_start_x = cx.saturating_sub(text.chars().count() / 2);
         for (col_offset, ch) in text.chars().enumerate() {
             let col_x = text_start_x + col_offset;
@@ -357,12 +389,16 @@ fn draw_warp_screen(f: &mut Frame, status_msg: &str, area: Rect) {
     }
 
     // Render the combined buffer as a single widget
-    let lines: Vec<Line> = buf.iter().map(|row| {
-        let spans: Vec<Span> = row.iter().map(|(ch, color)| {
-            Span::styled(ch.to_string(), Style::default().fg(*color))
-        }).collect();
-        Line::from(spans)
-    }).collect();
+    let lines: Vec<Line> = buf
+        .iter()
+        .map(|row| {
+            let spans: Vec<Span> = row
+                .iter()
+                .map(|(ch, color)| Span::styled(ch.to_string(), Style::default().fg(*color)))
+                .collect();
+            Line::from(spans)
+        })
+        .collect();
 
     let canvas = Paragraph::new(lines);
     f.render_widget(canvas, area);
@@ -392,52 +428,59 @@ fn relative_time(iso: &str) -> String {
 fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(5),
-            Constraint::Length(3),
-        ])
+        .constraints([Constraint::Min(5), Constraint::Length(3)])
         .split(area);
 
     let title = app.content_title();
 
     // Each message takes 2 lines: content + timestamp
-    let msg_lines: Vec<(Line, Line)> = app.messages.iter().map(|msg| {
-        let username = msg["username"].as_str().unwrap_or("");
-        let is_me = !app.username.is_empty() && username == app.username;
+    let msg_lines: Vec<(Line, Line)> = app
+        .messages
+        .iter()
+        .map(|msg| {
+            let username = msg["username"].as_str().unwrap_or("");
+            let is_me = !app.username.is_empty() && username == app.username;
 
-        let display_name = if is_me {
-            "(me)".to_string()
-        } else {
-            msg["displayName"].as_str()
-                .or_else(|| msg["display_name"].as_str())
-                .filter(|s| !s.is_empty())
-                .or_else(|| msg["username"].as_str())
-                .unwrap_or("?")
-                .to_string()
-        };
+            let display_name = if is_me {
+                "(me)".to_string()
+            } else {
+                msg["displayName"]
+                    .as_str()
+                    .or_else(|| msg["display_name"].as_str())
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| msg["username"].as_str())
+                    .unwrap_or("?")
+                    .to_string()
+            };
 
-        let content = msg["content"].as_str().unwrap_or("");
+            let content = msg["content"].as_str().unwrap_or("");
 
-        let created_at = msg["createdAt"].as_str()
-            .or_else(|| msg["created_at"].as_str())
-            .unwrap_or("");
-        let time_str = relative_time(created_at);
+            let created_at = msg["createdAt"]
+                .as_str()
+                .or_else(|| msg["created_at"].as_str())
+                .unwrap_or("");
+            let time_str = relative_time(created_at);
 
-        let msg_line = Line::from(vec![
-            Span::styled(
-                format!("{}: ", display_name),
-                Style::default().fg(if is_me { theme::TEXT_SECONDARY } else { theme::ACCENT }),
-            ),
-            Span::styled(content, Style::default().fg(theme::TEXT_PRIMARY)),
-        ]);
+            let msg_line = Line::from(vec![
+                Span::styled(
+                    format!("{}: ", display_name),
+                    Style::default().fg(if is_me {
+                        theme::TEXT_SECONDARY
+                    } else {
+                        theme::ACCENT
+                    }),
+                ),
+                Span::styled(content, Style::default().fg(theme::TEXT_PRIMARY)),
+            ]);
 
-        let time_line = Line::from(Span::styled(
-            format!("  {}", time_str),
-            Style::default().fg(theme::TEXT_MUTED),
-        ));
+            let time_line = Line::from(Span::styled(
+                format!("  {}", time_str),
+                Style::default().fg(theme::TEXT_MUTED),
+            ));
 
-        (msg_line, time_line)
-    }).collect();
+            (msg_line, time_line)
+        })
+        .collect();
 
     // Build list items anchored to bottom: take only what fits
     let inner_height = chunks[0].height.saturating_sub(2) as usize; // minus borders
@@ -451,7 +494,8 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     }
 
     // Skip from the top to anchor to bottom
-    let visible: Vec<ListItem> = all_lines.into_iter()
+    let visible: Vec<ListItem> = all_lines
+        .into_iter()
         .skip(skip)
         .map(ListItem::new)
         .collect();
@@ -474,7 +518,9 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
         let idx = (std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
-            .as_millis() / 80) as usize % spinner.len();
+            .as_millis()
+            / 80) as usize
+            % spinner.len();
         (
             format!("{} Sending...", spinner[idx]),
             Style::default().fg(theme::TEXT_MUTED).bg(theme::SURFACE),
@@ -482,7 +528,9 @@ fn draw_content(f: &mut Frame, app: &App, area: Rect) {
     } else if app.typing {
         (
             format!("> {}", app.input_buf),
-            Style::default().fg(theme::TEXT_PRIMARY).bg(theme::SURFACE_ELEVATED),
+            Style::default()
+                .fg(theme::TEXT_PRIMARY)
+                .bg(theme::SURFACE_ELEVATED),
         )
     } else if can_type {
         (
@@ -514,18 +562,25 @@ fn draw_action_menu(f: &mut Frame, menu: &ActionMenu, content_area: Rect) {
     let clear = Block::default().style(Style::default().bg(theme::SURFACE_ELEVATED));
     f.render_widget(clear, area);
 
-    let items: Vec<ListItem> = menu.items.iter().enumerate().map(|(i, label)| {
-        let style = if i == menu.selected {
-            Style::default().fg(theme::TEXT_PRIMARY).bg(theme::SURFACE_HOVER)
-        } else {
-            Style::default().fg(theme::TEXT_SECONDARY)
-        };
-        if i == menu.selected {
-            ListItem::new(format!(" > {} ", label)).style(style)
-        } else {
-            ListItem::new(format!("   {} ", label)).style(style)
-        }
-    }).collect();
+    let items: Vec<ListItem> = menu
+        .items
+        .iter()
+        .enumerate()
+        .map(|(i, label)| {
+            let style = if i == menu.selected {
+                Style::default()
+                    .fg(theme::TEXT_PRIMARY)
+                    .bg(theme::SURFACE_HOVER)
+            } else {
+                Style::default().fg(theme::TEXT_SECONDARY)
+            };
+            if i == menu.selected {
+                ListItem::new(format!(" > {} ", label)).style(style)
+            } else {
+                ListItem::new(format!("   {} ", label)).style(style)
+            }
+        })
+        .collect();
 
     let list = List::new(items).block(
         Block::default()
@@ -548,8 +603,14 @@ fn draw_friend_popup(f: &mut Frame, popup: &FriendPopup, content_area: Rect) {
         FriendEntryKind::IncomingRequest => "Friend Request",
         FriendEntryKind::OutgoingRequest => "Outgoing Request",
     };
-    lines.push(Line::from(Span::styled(kind_label, Style::default().fg(theme::TEXT_MUTED))));
-    lines.push(Line::from(Span::styled(name, Style::default().fg(theme::ACCENT))));
+    lines.push(Line::from(Span::styled(
+        kind_label,
+        Style::default().fg(theme::TEXT_MUTED),
+    )));
+    lines.push(Line::from(Span::styled(
+        name,
+        Style::default().fg(theme::ACCENT),
+    )));
 
     // Username (if display name differs)
     if entry.display_name.is_some() {
@@ -599,7 +660,9 @@ fn draw_friend_popup(f: &mut Frame, popup: &FriendPopup, content_area: Rect) {
         let style = if is_confirming {
             Style::default().fg(theme::DANGER)
         } else if is_selected {
-            Style::default().fg(theme::TEXT_PRIMARY).bg(theme::SURFACE_HOVER)
+            Style::default()
+                .fg(theme::TEXT_PRIMARY)
+                .bg(theme::SURFACE_HOVER)
         } else {
             Style::default().fg(theme::TEXT_SECONDARY)
         };
@@ -624,15 +687,24 @@ fn draw_friend_popup(f: &mut Frame, popup: &FriendPopup, content_area: Rect) {
 
 fn draw_add_friend(f: &mut Frame, input: &str, content_area: Rect) {
     let lines = vec![
-        Line::from(Span::styled("Add Friend", Style::default().fg(theme::ACCENT))),
+        Line::from(Span::styled(
+            "Add Friend",
+            Style::default().fg(theme::ACCENT),
+        )),
         Line::from(""),
-        Line::from(Span::styled("Enter username:", Style::default().fg(theme::TEXT_SECONDARY))),
+        Line::from(Span::styled(
+            "Enter username:",
+            Style::default().fg(theme::TEXT_SECONDARY),
+        )),
         Line::from(Span::styled(
             format!("> {}_", input),
             Style::default().fg(theme::TEXT_PRIMARY),
         )),
         Line::from(""),
-        Line::from(Span::styled("[enter] send  [esc] cancel", Style::default().fg(theme::TEXT_MUTED))),
+        Line::from(Span::styled(
+            "[enter] send  [esc] cancel",
+            Style::default().fg(theme::TEXT_MUTED),
+        )),
     ];
 
     let height = (lines.len() as u16) + 2;
@@ -658,12 +730,10 @@ fn draw_connecting_popup(f: &mut Frame, msg: &str, content_area: Rect) {
     let spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
     let idx = (t / 80) as usize % spinner.len();
 
-    let lines = vec![
-        Line::from(Span::styled(
-            format!("{} {}", spinner[idx], msg),
-            Style::default().fg(theme::ACCENT),
-        )),
-    ];
+    let lines = vec![Line::from(Span::styled(
+        format!("{} {}", spinner[idx], msg),
+        Style::default().fg(theme::ACCENT),
+    ))];
 
     let height = 3_u16;
     let width = (msg.len() as u16 + 6).min(content_area.width.saturating_sub(4));
@@ -671,14 +741,12 @@ fn draw_connecting_popup(f: &mut Frame, msg: &str, content_area: Rect) {
     let y = content_area.y + (content_area.height.saturating_sub(height)) / 2;
     let area = Rect::new(x, y, width, height);
 
-    let popup = Paragraph::new(lines)
-        .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme::ACCENT))
-                .style(Style::default().bg(theme::SURFACE_ELEVATED)),
-        );
+    let popup = Paragraph::new(lines).alignment(Alignment::Center).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme::ACCENT))
+            .style(Style::default().bg(theme::SURFACE_ELEVATED)),
+    );
     f.render_widget(popup, area);
 }
 
@@ -688,7 +756,10 @@ fn draw_error(f: &mut Frame, msg: &str, content_area: Rect) {
         Line::from(""),
         Line::from(Span::styled(msg, Style::default().fg(theme::TEXT_PRIMARY))),
         Line::from(""),
-        Line::from(Span::styled("Press any key to dismiss", Style::default().fg(theme::TEXT_MUTED))),
+        Line::from(Span::styled(
+            "Press any key to dismiss",
+            Style::default().fg(theme::TEXT_MUTED),
+        )),
     ];
 
     let height = (lines.len() as u16) + 2;
@@ -697,14 +768,12 @@ fn draw_error(f: &mut Frame, msg: &str, content_area: Rect) {
     let y = content_area.y + (content_area.height.saturating_sub(height)) / 2;
     let area = Rect::new(x, y, width, height);
 
-    let popup = Paragraph::new(lines)
-        .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(theme::DANGER))
-                .style(Style::default().bg(theme::SURFACE_ELEVATED)),
-        );
+    let popup = Paragraph::new(lines).alignment(Alignment::Center).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme::DANGER))
+            .style(Style::default().bg(theme::SURFACE_ELEVATED)),
+    );
     f.render_widget(popup, area);
 }
 
@@ -722,7 +791,10 @@ fn vu_bar(level: f32, width: u16) -> Line<'static> {
 
     Line::from(vec![
         Span::styled("▮".repeat(filled as usize), Style::default().fg(color)),
-        Span::styled("▯".repeat(empty as usize), Style::default().fg(theme::BORDER)),
+        Span::styled(
+            "▯".repeat(empty as usize),
+            Style::default().fg(theme::BORDER),
+        ),
     ])
 }
 
@@ -731,8 +803,16 @@ fn draw_voice_panel(f: &mut Frame, app: &App, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
 
     // Connection status
-    let status_text = if app.voice_room.is_some() { "Connected" } else { "Connecting..." };
-    let status_color = if app.voice_room.is_some() { theme::SUCCESS } else { theme::WARNING };
+    let status_text = if app.voice_room.is_some() {
+        "Connected"
+    } else {
+        "Connecting..."
+    };
+    let status_color = if app.voice_room.is_some() {
+        theme::SUCCESS
+    } else {
+        theme::WARNING
+    };
     lines.push(Line::from(vec![
         Span::styled("● ", Style::default().fg(status_color)),
         Span::styled(status_text, Style::default().fg(theme::TEXT_PRIMARY)),
@@ -750,17 +830,31 @@ fn draw_voice_panel(f: &mut Frame, app: &App, area: Rect) {
     // VU meters
     lines.push(Line::from(Span::styled(
         if app.muted { "MIC (muted)" } else { "MIC" },
-        Style::default().fg(if app.muted { theme::DANGER } else { theme::TEXT_SECONDARY }),
+        Style::default().fg(if app.muted {
+            theme::DANGER
+        } else {
+            theme::TEXT_SECONDARY
+        }),
     )));
-    lines.push(vu_bar(if app.muted { 0.0 } else { app.mic_level }, inner_width));
+    lines.push(vu_bar(
+        if app.muted { 0.0 } else { app.mic_level },
+        inner_width,
+    ));
 
     lines.push(Line::from(""));
 
     lines.push(Line::from(Span::styled(
         if app.deafened { "OUT (deaf)" } else { "OUTPUT" },
-        Style::default().fg(if app.deafened { theme::DANGER } else { theme::TEXT_SECONDARY }),
+        Style::default().fg(if app.deafened {
+            theme::DANGER
+        } else {
+            theme::TEXT_SECONDARY
+        }),
     )));
-    lines.push(vu_bar(if app.deafened { 0.0 } else { app.output_level }, inner_width));
+    lines.push(vu_bar(
+        if app.deafened { 0.0 } else { app.output_level },
+        inner_width,
+    ));
 
     lines.push(Line::from(""));
 
@@ -778,12 +872,20 @@ fn draw_voice_panel(f: &mut Frame, app: &App, area: Rect) {
     } else {
         for (user_id, display_name) in &app.voice_participants {
             let speaking = app.voice_speaking.contains(user_id);
-            let dot_color = if speaking { theme::SUCCESS } else { theme::TEXT_MUTED };
+            let dot_color = if speaking {
+                theme::SUCCESS
+            } else {
+                theme::TEXT_MUTED
+            };
             lines.push(Line::from(vec![
                 Span::styled("● ", Style::default().fg(dot_color)),
                 Span::styled(
                     display_name.as_str(),
-                    Style::default().fg(if speaking { theme::TEXT_PRIMARY } else { theme::TEXT_SECONDARY }),
+                    Style::default().fg(if speaking {
+                        theme::TEXT_PRIMARY
+                    } else {
+                        theme::TEXT_SECONDARY
+                    }),
                 ),
             ]));
         }
@@ -832,12 +934,24 @@ fn draw_toolbar(f: &mut Frame, app: &App, area: Rect) {
     let ws_connected = app.ws.is_some();
     let voice_connected = app.connected_room.is_some();
 
-    let ws_color = if ws_connected { theme::SUCCESS } else { theme::DANGER };
-    let voice_color = if voice_connected { theme::SUCCESS }
-        else if app.selected_room_id.is_some() { theme::WARNING }
-        else { theme::TEXT_MUTED };
+    let ws_color = if ws_connected {
+        theme::SUCCESS
+    } else {
+        theme::DANGER
+    };
+    let voice_color = if voice_connected {
+        theme::SUCCESS
+    } else if app.selected_room_id.is_some() {
+        theme::WARNING
+    } else {
+        theme::TEXT_MUTED
+    };
 
-    let mic_color = if app.muted { theme::DANGER } else { theme::SUCCESS };
+    let mic_color = if app.muted {
+        theme::DANGER
+    } else {
+        theme::SUCCESS
+    };
 
     // Pad to push status to the right
     let left_len: usize = left_spans.iter().map(|s| s.content.len()).sum();
@@ -851,12 +965,14 @@ fn draw_toolbar(f: &mut Frame, app: &App, area: Rect) {
     left_spans.push(Span::styled("  ● ", Style::default().fg(ws_color)));
     left_spans.push(Span::styled("wss", Style::default().fg(theme::TEXT_MUTED)));
     left_spans.push(Span::styled("  ● ", Style::default().fg(voice_color)));
-    left_spans.push(Span::styled("voice", Style::default().fg(theme::TEXT_MUTED)));
+    left_spans.push(Span::styled(
+        "voice",
+        Style::default().fg(theme::TEXT_MUTED),
+    ));
     left_spans.push(Span::styled("  ● ", Style::default().fg(mic_color)));
     left_spans.push(Span::styled("mic ", Style::default().fg(theme::TEXT_MUTED)));
 
-    let bar = Paragraph::new(Line::from(left_spans))
-        .style(Style::default().bg(theme::SURFACE));
+    let bar = Paragraph::new(Line::from(left_spans)).style(Style::default().bg(theme::SURFACE));
 
     f.render_widget(bar, area);
 }

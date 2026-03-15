@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
-use anyhow::Result;
 use crate::api::ApiClient;
 use crate::auth;
 use crate::ws::{WsClient, WsClientMessage};
+use anyhow::Result;
 
 pub async fn run(status: Option<String>) -> Result<()> {
     let creds = auth::require_auth()?;

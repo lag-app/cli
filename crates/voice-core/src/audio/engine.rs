@@ -4,26 +4,31 @@
 use anyhow::{anyhow, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Host, Stream, StreamConfig, SupportedStreamConfigRange};
-use ringbuf::traits::{Consumer, Observer, Producer, Split};
-use ringbuf::{HeapRb, HeapCons, HeapProd};
 use parking_lot::Mutex;
+use ringbuf::traits::{Consumer, Observer, Producer, Split};
+use ringbuf::{HeapCons, HeapProd, HeapRb};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tracing::{debug, error, info};
 
 pub const SAMPLE_RATE: u32 = 48000;
-const CAPTURE_RING_SAMPLES: usize = 4800;   // 100ms - tight to avoid latency buildup
+const CAPTURE_RING_SAMPLES: usize = 4800; // 100ms - tight to avoid latency buildup
 const PLAYBACK_RING_SAMPLES: usize = 24000; // 500ms - enough for network jitter absorption
 
 fn pick_best_config(supported: &[SupportedStreamConfigRange]) -> (u16, u32) {
-    if let Some(cfg) = supported.iter().find(|c| {
-        c.min_sample_rate().0 <= SAMPLE_RATE && c.max_sample_rate().0 >= SAMPLE_RATE
-    }) {
+    if let Some(cfg) = supported
+        .iter()
+        .find(|c| c.min_sample_rate().0 <= SAMPLE_RATE && c.max_sample_rate().0 >= SAMPLE_RATE)
+    {
         return (cfg.channels(), SAMPLE_RATE);
     }
     if let Some(cfg) = supported.first() {
-        let rate = cfg.max_sample_rate().0.min(48000).max(cfg.min_sample_rate().0);
+        let rate = cfg
+            .max_sample_rate()
+            .0
+            .min(48000)
+            .max(cfg.min_sample_rate().0);
         return (cfg.channels(), rate);
     }
     (2, SAMPLE_RATE)
@@ -194,7 +199,11 @@ impl AudioEngine {
             buffer_size: cpal::BufferSize::Default,
         };
 
-        info!(channels = device_channels, sample_rate = device_rate, "Starting capture stream");
+        info!(
+            channels = device_channels,
+            sample_rate = device_rate,
+            "Starting capture stream"
+        );
 
         let producer = Arc::clone(&self.capture_producer);
         let volume = Arc::clone(&self.input_volume);
@@ -223,15 +232,23 @@ impl AudioEngine {
                         let src_idx = (src_pos as usize) * ch;
                         let frac = (src_pos - (src_pos as usize) as f64) as f32;
                         let s0 = if src_idx < data.len() {
-                            if ch == 1 { data[src_idx] } else {
+                            if ch == 1 {
+                                data[src_idx]
+                            } else {
                                 data[src_idx..][..ch].iter().sum::<f32>() / ch as f32
                             }
-                        } else { 0.0 };
+                        } else {
+                            0.0
+                        };
                         let s1 = if src_idx + ch < data.len() {
-                            if ch == 1 { data[src_idx + ch] } else {
+                            if ch == 1 {
+                                data[src_idx + ch]
+                            } else {
                                 data[src_idx + ch..][..ch].iter().sum::<f32>() / ch as f32
                             }
-                        } else { s0 };
+                        } else {
+                            s0
+                        };
                         let _ = prod.try_push((s0 + (s1 - s0) * frac) * vol);
                     }
                 } else {
@@ -281,7 +298,11 @@ impl AudioEngine {
             buffer_size: cpal::BufferSize::Default,
         };
 
-        info!(channels = device_channels, sample_rate = device_rate, "Starting playback stream");
+        info!(
+            channels = device_channels,
+            sample_rate = device_rate,
+            "Starting playback stream"
+        );
 
         let consumer = Arc::clone(&self.playback_consumer);
         let volume = Arc::clone(&self.output_volume);

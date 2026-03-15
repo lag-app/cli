@@ -1,12 +1,12 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
+use crate::auth;
+use crate::config::{self, Credentials};
 use anyhow::{anyhow, Result};
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use serde::de::DeserializeOwned;
 use std::time::{Duration, Instant};
-use crate::auth;
-use crate::config::{self, Credentials};
 
 // Refresh 5 minutes before expiry to avoid hitting 401
 const REFRESH_BUFFER: Duration = Duration::from_secs(300);
@@ -64,11 +64,21 @@ impl ApiClient {
     pub async fn get<T: DeserializeOwned>(&mut self, path: &str) -> Result<T> {
         self.ensure_fresh_token().await?;
         let url = format!("{}{}", self.base_url, path);
-        let resp = self.client.get(&url).headers(self.auth_headers()).send().await?;
+        let resp = self
+            .client
+            .get(&url)
+            .headers(self.auth_headers())
+            .send()
+            .await?;
 
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
             self.do_refresh().await?;
-            let resp = self.client.get(&url).headers(self.auth_headers()).send().await?;
+            let resp = self
+                .client
+                .get(&url)
+                .headers(self.auth_headers())
+                .send()
+                .await?;
             return parse_response(resp).await;
         }
 
@@ -87,11 +97,23 @@ impl ApiClient {
     ) -> Result<T> {
         self.ensure_fresh_token().await?;
         let url = format!("{}{}", self.base_url, path);
-        let resp = self.client.post(&url).headers(self.auth_headers()).json(body).send().await?;
+        let resp = self
+            .client
+            .post(&url)
+            .headers(self.auth_headers())
+            .json(body)
+            .send()
+            .await?;
 
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
             self.do_refresh().await?;
-            let resp = self.client.post(&url).headers(self.auth_headers()).json(body).send().await?;
+            let resp = self
+                .client
+                .post(&url)
+                .headers(self.auth_headers())
+                .json(body)
+                .send()
+                .await?;
             return parse_response(resp).await;
         }
 
@@ -101,11 +123,21 @@ impl ApiClient {
     pub async fn delete_no_body(&mut self, path: &str) -> Result<()> {
         self.ensure_fresh_token().await?;
         let url = format!("{}{}", self.base_url, path);
-        let resp = self.client.delete(&url).headers(self.auth_headers()).send().await?;
+        let resp = self
+            .client
+            .delete(&url)
+            .headers(self.auth_headers())
+            .send()
+            .await?;
 
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
             self.do_refresh().await?;
-            let resp = self.client.delete(&url).headers(self.auth_headers()).send().await?;
+            let resp = self
+                .client
+                .delete(&url)
+                .headers(self.auth_headers())
+                .send()
+                .await?;
             if !resp.status().is_success() {
                 let status = resp.status();
                 let text = resp.text().await.unwrap_or_default();
@@ -129,7 +161,6 @@ impl ApiClient {
     pub fn base_url(&self) -> &str {
         &self.base_url
     }
-
 }
 
 async fn parse_response<T: DeserializeOwned>(resp: reqwest::Response) -> Result<T> {

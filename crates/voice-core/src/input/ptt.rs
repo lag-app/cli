@@ -359,8 +359,14 @@ mod tests {
     #[test]
     fn key_to_string_roundtrip_all() {
         let keys = vec![
-            Key::Tab, Key::CapsLock, Key::ShiftLeft, Key::Space,
-            Key::F1, Key::F12, Key::KeyA, Key::KeyZ,
+            Key::Tab,
+            Key::CapsLock,
+            Key::ShiftLeft,
+            Key::Space,
+            Key::F1,
+            Key::F12,
+            Key::KeyA,
+            Key::KeyZ,
         ];
         for key in keys {
             let s = key_to_string(&key).expect(&format!("key_to_string failed for {:?}", key));

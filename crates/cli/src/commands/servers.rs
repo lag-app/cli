@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
-use anyhow::Result;
 use crate::api::ApiClient;
 use crate::auth;
+use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal;
 
@@ -29,16 +29,19 @@ async fn interactive_server_picker(api: &mut ApiClient) -> Result<()> {
 
     let selected = arrow_select(
         "Select a server",
-        &servers.iter().map(|s| {
-            let name = s["name"].as_str().unwrap_or("?");
-            let members = s["memberCount"].as_u64().unwrap_or(0);
-            let emoji = s["iconEmoji"].as_str().unwrap_or("");
-            if !emoji.is_empty() {
-                format!("{} {} ({} members)", emoji, name, members)
-            } else {
-                format!("{} ({} members)", name, members)
-            }
-        }).collect::<Vec<_>>(),
+        &servers
+            .iter()
+            .map(|s| {
+                let name = s["name"].as_str().unwrap_or("?");
+                let members = s["memberCount"].as_u64().unwrap_or(0);
+                let emoji = s["iconEmoji"].as_str().unwrap_or("");
+                if !emoji.is_empty() {
+                    format!("{} {} ({} members)", emoji, name, members)
+                } else {
+                    format!("{} ({} members)", name, members)
+                }
+            })
+            .collect::<Vec<_>>(),
     )?;
 
     let server = &servers[selected];
@@ -48,11 +51,19 @@ async fn interactive_server_picker(api: &mut ApiClient) -> Result<()> {
     interactive_room_picker(api, &server_id, &server_name).await
 }
 
-fn interactive_room_picker<'a>(api: &'a mut ApiClient, server_id: &'a str, server_name: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + 'a>> {
+fn interactive_room_picker<'a>(
+    api: &'a mut ApiClient,
+    server_id: &'a str,
+    server_name: &'a str,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + 'a>> {
     Box::pin(interactive_room_picker_inner(api, server_id, server_name))
 }
 
-async fn interactive_room_picker_inner(api: &mut ApiClient, server_id: &str, server_name: &str) -> Result<()> {
+async fn interactive_room_picker_inner(
+    api: &mut ApiClient,
+    server_id: &str,
+    server_name: &str,
+) -> Result<()> {
     let details: serde_json::Value = api.get(&format!("/servers/{}", server_id)).await?;
 
     let rooms = details["rooms"]
@@ -64,29 +75,26 @@ async fn interactive_room_picker_inner(api: &mut ApiClient, server_id: &str, ser
         return Ok(());
     }
 
-    let labels: Vec<String> = rooms.iter().map(|r| {
-        let name = r["name"].as_str().unwrap_or("?");
-        let participants = r["participants"]
-            .as_array()
-            .map(|p| p.len())
-            .unwrap_or(0);
-        if participants > 0 {
-            let names: Vec<&str> = r["participants"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .filter_map(|p| p["username"].as_str())
-                .collect();
-            format!("{} ({}: {})", name, participants, names.join(", "))
-        } else {
-            name.to_string()
-        }
-    }).collect();
+    let labels: Vec<String> = rooms
+        .iter()
+        .map(|r| {
+            let name = r["name"].as_str().unwrap_or("?");
+            let participants = r["participants"].as_array().map(|p| p.len()).unwrap_or(0);
+            if participants > 0 {
+                let names: Vec<&str> = r["participants"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter_map(|p| p["username"].as_str())
+                    .collect();
+                format!("{} ({}: {})", name, participants, names.join(", "))
+            } else {
+                name.to_string()
+            }
+        })
+        .collect();
 
-    let selected = arrow_select(
-        &format!("{} - select a room", server_name),
-        &labels,
-    )?;
+    let selected = arrow_select(&format!("{} - select a room", server_name), &labels)?;
 
     let room = &rooms[selected];
     let _room_id = room["id"].as_str().unwrap().to_string();
@@ -106,25 +114,36 @@ async fn interactive_room_picker_inner(api: &mut ApiClient, server_id: &str, ser
     match action {
         0 => {
             crate::commands::join::run(
-                server_name.to_string(), room_name.to_string(),
-                None, false, None, None, false,
-            ).await
+                server_name.to_string(),
+                room_name.to_string(),
+                None,
+                false,
+                None,
+                None,
+                false,
+            )
+            .await
         }
         1 => {
             crate::commands::join::run(
-                server_name.to_string(), room_name.to_string(),
-                None, false, None, None, true,
-            ).await
+                server_name.to_string(),
+                room_name.to_string(),
+                None,
+                false,
+                None,
+                None,
+                true,
+            )
+            .await
         }
         2 => {
             crate::commands::chat::run(Some(crate::cli::ChatAction::Open {
                 server: server_name.to_string(),
                 room: room_name.to_string(),
-            })).await
+            }))
+            .await
         }
-        3 => {
-            interactive_room_picker(api, server_id, server_name).await
-        }
+        3 => interactive_room_picker(api, server_id, server_name).await,
         _ => Ok(()),
     }
 }
@@ -161,7 +180,10 @@ fn arrow_select(title: &str, items: &[String]) -> Result<usize> {
     let result = loop {
         write!(stdout, "\r\x1b[J")?;
         write!(stdout, "\x1b[1m{}\x1b[0m\r\n", title)?;
-        write!(stdout, "\x1b[90m(arrows to move, enter to select, esc to quit)\x1b[0m\r\n\r\n")?;
+        write!(
+            stdout,
+            "\x1b[90m(arrows to move, enter to select, esc to quit)\x1b[0m\r\n\r\n"
+        )?;
 
         for (i, item) in items.iter().enumerate() {
             if i == selected {
@@ -179,7 +201,9 @@ fn arrow_select(title: &str, items: &[String]) -> Result<usize> {
                     selected = selected.saturating_sub(1);
                 }
                 (KeyCode::Down | KeyCode::Char('j'), _) => {
-                    if selected < items.len() - 1 { selected += 1; }
+                    if selected < items.len() - 1 {
+                        selected += 1;
+                    }
                 }
                 (KeyCode::Enter, _) => break Some(selected),
                 (KeyCode::Esc, _) | (KeyCode::Char('c'), KeyModifiers::CONTROL) => break None,

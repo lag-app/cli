@@ -59,10 +59,10 @@ impl OpusCodec {
     }
 
     pub fn decode(&mut self, opus_data: &[u8], pcm_out: &mut [f32]) -> Result<usize> {
-        let packet = Packet::try_from(opus_data)
-            .map_err(|e| anyhow!("Invalid Opus packet: {}", e))?;
-        let signals = MutSignals::try_from(pcm_out)
-            .map_err(|e| anyhow!("Invalid PCM buffer: {}", e))?;
+        let packet =
+            Packet::try_from(opus_data).map_err(|e| anyhow!("Invalid Opus packet: {}", e))?;
+        let signals =
+            MutSignals::try_from(pcm_out).map_err(|e| anyhow!("Invalid PCM buffer: {}", e))?;
         let samples = self
             .decoder
             .decode_float(Some(packet), signals, false)
@@ -71,8 +71,8 @@ impl OpusCodec {
     }
 
     pub fn decode_loss(&mut self, pcm_out: &mut [f32]) -> Result<usize> {
-        let signals = MutSignals::try_from(pcm_out)
-            .map_err(|e| anyhow!("Invalid PCM buffer: {}", e))?;
+        let signals =
+            MutSignals::try_from(pcm_out).map_err(|e| anyhow!("Invalid PCM buffer: {}", e))?;
         let samples = self
             .decoder
             .decode_float(None, signals, false)

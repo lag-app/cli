@@ -91,6 +91,11 @@ mod tests {
         let input_rms = (frame.iter().map(|s| s * s).sum::<f32>() / frame.len() as f32).sqrt();
         d.process(&mut frame);
         let output_rms = (frame.iter().map(|s| s * s).sum::<f32>() / frame.len() as f32).sqrt();
-        assert!(output_rms <= input_rms * 1.5, "output RMS {} should not exceed 1.5x input RMS {}", output_rms, input_rms);
+        assert!(
+            output_rms <= input_rms * 1.5,
+            "output RMS {} should not exceed 1.5x input RMS {}",
+            output_rms,
+            input_rms
+        );
     }
 }

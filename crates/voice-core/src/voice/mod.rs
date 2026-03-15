@@ -3,4 +3,4 @@
 
 pub mod room;
 
-pub use room::{VoiceRoom, VoiceEvent, ParticipantInfo};
+pub use room::{ParticipantInfo, VoiceEvent, VoiceRoom};

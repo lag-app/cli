@@ -1,11 +1,11 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
-use anyhow::Result;
 use crate::api::ApiClient;
 use crate::auth;
 use crate::cli::ChatAction;
 use crate::ws::{WsClient, WsClientMessage, WsServerMessage};
+use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal;
 use std::io::Write;
@@ -171,13 +171,15 @@ async fn resolve_server_room(
 }
 
 fn print_message(msg: &serde_json::Value) {
-    let name = msg["displayName"].as_str()
+    let name = msg["displayName"]
+        .as_str()
         .or_else(|| msg["display_name"].as_str())
         .filter(|s| !s.is_empty())
         .or_else(|| msg["username"].as_str())
         .unwrap_or("?");
     let content = msg["content"].as_str().unwrap_or("");
-    let created_at = msg["createdAt"].as_str()
+    let created_at = msg["createdAt"]
+        .as_str()
         .or_else(|| msg["created_at"].as_str())
         .unwrap_or("");
     let time = chrono::DateTime::parse_from_rfc3339(created_at)

@@ -6,21 +6,21 @@ use crate::audio::vad::VoiceActivityDetector;
 use anyhow::{anyhow, Result};
 use futures_util::StreamExt;
 use livekit::options::TrackPublishOptions;
+use livekit::participant::Participant;
 use livekit::track::{LocalAudioTrack, LocalTrack, RemoteTrack, TrackSource};
 use livekit::webrtc::audio_frame::AudioFrame;
 use livekit::webrtc::audio_source::native::NativeAudioSource;
 use livekit::webrtc::audio_source::RtcAudioSource;
 use livekit::webrtc::audio_stream::native::NativeAudioStream;
 use livekit::webrtc::prelude::AudioSourceOptions;
-use livekit::participant::Participant;
 use livekit::{Room, RoomEvent, RoomOptions};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn};
@@ -136,7 +136,9 @@ impl VoiceRoom {
 
         let participant_lookup = Arc::new(Mutex::new(HashMap::new()));
         for p in &participants {
-            participant_lookup.lock().insert(p.user_id.clone(), p.clone());
+            participant_lookup
+                .lock()
+                .insert(p.user_id.clone(), p.clone());
         }
 
         let muted = Arc::new(AtomicBool::new(false));
@@ -262,13 +264,10 @@ impl VoiceRoom {
             let _ = engine.stop_playback();
         }
 
-        self.room
-            .close()
-            .await
-            .map_err(|e| {
-                error!("Voice room close failed: {}", e);
-                anyhow!("Failed to disconnect from voice")
-            })?;
+        self.room.close().await.map_err(|e| {
+            error!("Voice room close failed: {}", e);
+            anyhow!("Failed to disconnect from voice")
+        })?;
 
         info!("Disconnected from voice room");
         Ok(())
@@ -474,9 +473,7 @@ impl VoiceRoom {
                 }
 
                 RoomEvent::TrackSubscribed {
-                    track,
-                    participant,
-                    ..
+                    track, participant, ..
                 } => {
                     let identity = participant.identity().to_string();
                     match track {
@@ -509,9 +506,7 @@ impl VoiceRoom {
                 }
 
                 RoomEvent::TrackUnsubscribed {
-                    track,
-                    participant,
-                    ..
+                    track, participant, ..
                 } => {
                     let identity = participant.identity().to_string();
                     match &track {
@@ -548,12 +543,13 @@ impl VoiceRoom {
                 }
 
                 RoomEvent::ActiveSpeakersChanged { speakers } => {
-                    let current: std::collections::HashSet<String> = speakers.iter().map(|s| {
-                        match s {
+                    let current: std::collections::HashSet<String> = speakers
+                        .iter()
+                        .map(|s| match s {
                             Participant::Local(p) => p.identity().to_string(),
                             Participant::Remote(p) => p.identity().to_string(),
-                        }
-                    }).collect();
+                        })
+                        .collect();
 
                     // Mark new speakers
                     for id in &current {
@@ -620,15 +616,13 @@ impl VoiceRoom {
                 continue;
             }
 
-            let f32_data: Vec<f32> = frame
-                .data
-                .iter()
-                .map(|&s| s as f32 / 32768.0)
-                .collect();
+            let f32_data: Vec<f32> = frame.data.iter().map(|&s| s as f32 / 32768.0).collect();
 
             level_counter += 1;
             if level_counter.is_multiple_of(5) {
-                let rms = (f32_data.iter().map(|s| s * s).sum::<f32>() / f32_data.len().max(1) as f32).sqrt();
+                let rms = (f32_data.iter().map(|s| s * s).sum::<f32>()
+                    / f32_data.len().max(1) as f32)
+                    .sqrt();
                 let level = (rms * 5.0).min(1.0);
                 let _ = event_tx.send(VoiceEvent::OutputLevel { level });
             }
@@ -657,14 +651,21 @@ mod tests {
         assert_eq!(restored.user_id, "u123");
         assert_eq!(restored.username, "alice");
         assert_eq!(restored.display_name.as_deref(), Some("Alice"));
-        assert_eq!(restored.avatar_url.as_deref(), Some("https://example.com/avatar.png"));
+        assert_eq!(
+            restored.avatar_url.as_deref(),
+            Some("https://example.com/avatar.png")
+        );
     }
 
     #[test]
     fn voice_event_debug_format() {
         let events: Vec<VoiceEvent> = vec![
-            VoiceEvent::Connected { participants: vec![] },
-            VoiceEvent::Disconnected { reason: "test".into() },
+            VoiceEvent::Connected {
+                participants: vec![],
+            },
+            VoiceEvent::Disconnected {
+                reason: "test".into(),
+            },
             VoiceEvent::ParticipantJoined {
                 participant: ParticipantInfo {
                     user_id: "u1".into(),
@@ -673,11 +674,21 @@ mod tests {
                     avatar_url: None,
                 },
             },
-            VoiceEvent::ParticipantLeft { user_id: "u1".into() },
-            VoiceEvent::Speaking { user_id: "u1".into(), speaking: true },
-            VoiceEvent::TrackMuted { user_id: "u1".into(), muted: true },
+            VoiceEvent::ParticipantLeft {
+                user_id: "u1".into(),
+            },
+            VoiceEvent::Speaking {
+                user_id: "u1".into(),
+                speaking: true,
+            },
+            VoiceEvent::TrackMuted {
+                user_id: "u1".into(),
+                muted: true,
+            },
             VoiceEvent::Reconnecting,
-            VoiceEvent::Reconnected { participants: vec![] },
+            VoiceEvent::Reconnected {
+                participants: vec![],
+            },
             VoiceEvent::MicLevel { level: 0.5 },
             VoiceEvent::OutputLevel { level: 0.3 },
         ];

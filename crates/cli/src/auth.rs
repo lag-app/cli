@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
-use anyhow::{anyhow, Result};
 use crate::config::{self, Credentials};
+use anyhow::{anyhow, Result};
 use rand::Rng;
 use url::Url;
 
@@ -11,20 +11,14 @@ const SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOi
 const WEB_URL: &str = "https://trylag.com";
 
 pub fn require_auth() -> Result<Credentials> {
-    config::load_credentials()
-        .ok_or_else(|| anyhow!("Not logged in. Run `lag login` first."))
+    config::load_credentials().ok_or_else(|| anyhow!("Not logged in. Run `lag login` first."))
 }
 
 pub async fn login_flow() -> Result<Credentials> {
     let state = generate_state();
     let (port, server) = start_callback_server()?;
 
-    let auth_url = format!(
-        "{}/auth/cli?port={}&state={}",
-        WEB_URL,
-        port,
-        state,
-    );
+    let auth_url = format!("{}/auth/cli?port={}&state={}", WEB_URL, port, state,);
 
     println!("Opening browser for authentication...");
     println!("If the browser doesn't open, visit:\n{}\n", auth_url);
@@ -43,7 +37,9 @@ pub async fn login_flow() -> Result<Credentials> {
 
 fn generate_state() -> String {
     let mut rng = rand::thread_rng();
-    (0..32).map(|_| format!("{:02x}", rng.gen::<u8>())).collect()
+    (0..32)
+        .map(|_| format!("{:02x}", rng.gen::<u8>()))
+        .collect()
 }
 
 fn start_callback_server() -> Result<(u16, tiny_http::Server)> {
@@ -72,14 +68,15 @@ fn wait_for_callback(server: tiny_http::Server, expected_state: &str) -> Result<
         let url = Url::parse(&url_str)?;
 
         if url.path() != "/callback" {
-            let response = tiny_http::Response::from_string("Not found")
-                .with_status_code(404);
+            let response = tiny_http::Response::from_string("Not found").with_status_code(404);
             let _ = request.respond(response);
             continue;
         }
 
-        let params: std::collections::HashMap<String, String> =
-            url.query_pairs().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let params: std::collections::HashMap<String, String> = url
+            .query_pairs()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
 
         if let (Some(access_token), Some(refresh_token)) =
             (params.get("access_token"), params.get("refresh_token"))
@@ -87,8 +84,8 @@ fn wait_for_callback(server: tiny_http::Server, expected_state: &str) -> Result<
             // Verify state to prevent CSRF
             if let Some(state) = params.get("state") {
                 if state != expected_state {
-                    let response = tiny_http::Response::from_string("Invalid state")
-                        .with_status_code(400);
+                    let response =
+                        tiny_http::Response::from_string("Invalid state").with_status_code(400);
                     let _ = request.respond(response);
                     continue;
                 }
@@ -96,12 +93,11 @@ fn wait_for_callback(server: tiny_http::Server, expected_state: &str) -> Result<
 
             // Redirect browser to the website's success page
             let success_url = format!("{}/auth/cli/success", WEB_URL);
-            let response = tiny_http::Response::empty(302)
-                .with_header(
-                    format!("Location: {}", success_url)
-                        .parse::<tiny_http::Header>()
-                        .unwrap(),
-                );
+            let response = tiny_http::Response::empty(302).with_header(
+                format!("Location: {}", success_url)
+                    .parse::<tiny_http::Header>()
+                    .unwrap(),
+            );
             let _ = request.respond(response);
 
             return Ok(Credentials {
@@ -111,8 +107,7 @@ fn wait_for_callback(server: tiny_http::Server, expected_state: &str) -> Result<
         }
 
         // No tokens in request - return 400
-        let response = tiny_http::Response::from_string("Missing tokens")
-            .with_status_code(400);
+        let response = tiny_http::Response::from_string("Missing tokens").with_status_code(400);
         let _ = request.respond(response);
     }
 }
@@ -120,7 +115,10 @@ fn wait_for_callback(server: tiny_http::Server, expected_state: &str) -> Result<
 pub async fn refresh_token(refresh_token: &str) -> Result<Credentials> {
     let client = reqwest::Client::new();
     let resp = client
-        .post(format!("{}/auth/v1/token?grant_type=refresh_token", SUPABASE_URL))
+        .post(format!(
+            "{}/auth/v1/token?grant_type=refresh_token",
+            SUPABASE_URL
+        ))
         .header("apikey", SUPABASE_ANON_KEY)
         .json(&serde_json::json!({ "refresh_token": refresh_token }))
         .send()
@@ -134,7 +132,9 @@ pub async fn refresh_token(refresh_token: &str) -> Result<Credentials> {
         // Not on transient errors (500, network, etc.)
         if status.as_u16() == 400 || status.as_u16() == 401 || status.as_u16() == 403 {
             let _ = config::clear_credentials();
-            return Err(anyhow!("Session expired. Run `lag login` to sign in again."));
+            return Err(anyhow!(
+                "Session expired. Run `lag login` to sign in again."
+            ));
         }
 
         return Err(anyhow!("Token refresh failed ({}): {}", status, body));

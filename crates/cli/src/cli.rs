@@ -224,15 +224,30 @@ mod tests {
     #[test]
     fn parse_join_with_flags() {
         let cli = Cli::try_parse_from([
-            "lag", "join", "my-server", "general",
-            "--ptt", "KeyV",
+            "lag",
+            "join",
+            "my-server",
+            "general",
+            "--ptt",
+            "KeyV",
             "--no-vad",
-            "--input-device", "Blue Yeti",
-            "--output-device", "Speakers",
+            "--input-device",
+            "Blue Yeti",
+            "--output-device",
+            "Speakers",
             "--with-chat",
-        ]).unwrap();
+        ])
+        .unwrap();
         match cli.command {
-            Some(Commands::Join { server, room, ptt, no_vad, input_device, output_device, with_chat }) => {
+            Some(Commands::Join {
+                server,
+                room,
+                ptt,
+                no_vad,
+                input_device,
+                output_device,
+                with_chat,
+            }) => {
                 assert_eq!(server, "my-server");
                 assert_eq!(room, "general");
                 assert_eq!(ptt.as_deref(), Some("KeyV"));
@@ -247,9 +262,12 @@ mod tests {
 
     #[test]
     fn parse_config_set() {
-        let cli = Cli::try_parse_from(["lag", "config", "set", "api_url", "https://example.com"]).unwrap();
+        let cli = Cli::try_parse_from(["lag", "config", "set", "api_url", "https://example.com"])
+            .unwrap();
         match cli.command {
-            Some(Commands::Config { action: Some(ConfigAction::Set { key, value }) }) => {
+            Some(Commands::Config {
+                action: Some(ConfigAction::Set { key, value }),
+            }) => {
                 assert_eq!(key, "api_url");
                 assert_eq!(value, "https://example.com");
             }
@@ -261,7 +279,9 @@ mod tests {
     fn parse_audio_volume() {
         let cli = Cli::try_parse_from(["lag", "audio", "volume", "input", "75"]).unwrap();
         match cli.command {
-            Some(Commands::Audio { action: Some(AudioAction::Volume { target, level }) }) => {
+            Some(Commands::Audio {
+                action: Some(AudioAction::Volume { target, level }),
+            }) => {
                 assert_eq!(target, "input");
                 assert_eq!(level, 75);
             }
@@ -273,7 +293,9 @@ mod tests {
     fn parse_friends_add() {
         let cli = Cli::try_parse_from(["lag", "friends", "add", "alice"]).unwrap();
         match cli.command {
-            Some(Commands::Friends { action: Some(FriendsAction::Add { username }) }) => {
+            Some(Commands::Friends {
+                action: Some(FriendsAction::Add { username }),
+            }) => {
                 assert_eq!(username, "alice");
             }
             _ => panic!("expected Friends Add"),

@@ -1,17 +1,17 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
-use anyhow::Result;
-use lag_voice_core::{AudioEngine, AudioSettings, PushToTalkManager, VoiceRoom, VoiceEvent};
-use parking_lot::Mutex;
-use std::sync::Arc;
 use crate::api::ApiClient;
 use crate::auth;
 use crate::config;
 use crate::ws::{WsClient, WsServerMessage};
+use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal;
+use lag_voice_core::{AudioEngine, AudioSettings, PushToTalkManager, VoiceEvent, VoiceRoom};
+use parking_lot::Mutex;
 use std::io::Write;
+use std::sync::Arc;
 
 pub async fn run(
     server: String,
@@ -77,7 +77,11 @@ pub async fn run(
     }
     ptt.clone().start_listener();
 
-    let vad_threshold = if no_vad { 1.0 } else { audio_settings.vad_threshold };
+    let vad_threshold = if no_vad {
+        1.0
+    } else {
+        audio_settings.vad_threshold
+    };
 
     // Connect to voice
     let (event_tx, mut event_rx) = VoiceRoom::create_event_channel();
@@ -129,7 +133,8 @@ pub async fn run(
             ))
             .await?;
         for msg in messages.iter().rev() {
-            let name = msg["displayName"].as_str()
+            let name = msg["displayName"]
+                .as_str()
                 .or_else(|| msg["display_name"].as_str())
                 .filter(|s| !s.is_empty())
                 .or_else(|| msg["username"].as_str())
@@ -254,7 +259,8 @@ pub async fn run(
     // Graceful disconnect
     println!("\nDisconnecting...");
     voice_room.disconnect().await?;
-    api.delete_no_body(&format!("/voice/rooms/{}/leave", room_id)).await?;
+    api.delete_no_body(&format!("/voice/rooms/{}/leave", room_id))
+        .await?;
     println!("Disconnected.");
 
     result

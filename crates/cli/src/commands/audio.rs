@@ -1,11 +1,10 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
-use anyhow::Result;
-use lag_voice_core::{AudioEngine, AudioSettings};
 use crate::cli::AudioAction;
 use crate::config;
-
+use anyhow::Result;
+use lag_voice_core::{AudioEngine, AudioSettings};
 
 pub async fn run(action: Option<AudioAction>) -> Result<()> {
     match action {
@@ -31,7 +30,10 @@ fn show_config() -> Result<()> {
         "  Output device: {}",
         settings.output_device.as_deref().unwrap_or("(default)")
     );
-    println!("  Input volume:  {}%", (settings.input_volume * 100.0) as u32);
+    println!(
+        "  Input volume:  {}%",
+        (settings.input_volume * 100.0) as u32
+    );
     println!(
         "  Output volume: {}%",
         (settings.output_volume * 100.0) as u32
@@ -78,7 +80,10 @@ fn set_input(name: &str) -> Result<()> {
     let engine = AudioEngine::new();
     let inputs = engine.list_input_devices();
     if !inputs.iter().any(|d| d.name == name) {
-        anyhow::bail!("Input device '{}' not found. Run `lag audio devices` to see available devices.", name);
+        anyhow::bail!(
+            "Input device '{}' not found. Run `lag audio devices` to see available devices.",
+            name
+        );
     }
 
     settings.input_device = Some(name.to_string());
@@ -94,7 +99,10 @@ fn set_output(name: &str) -> Result<()> {
     let engine = AudioEngine::new();
     let outputs = engine.list_output_devices();
     if !outputs.iter().any(|d| d.name == name) {
-        anyhow::bail!("Output device '{}' not found. Run `lag audio devices` to see available devices.", name);
+        anyhow::bail!(
+            "Output device '{}' not found. Run `lag audio devices` to see available devices.",
+            name
+        );
     }
 
     settings.output_device = Some(name.to_string());

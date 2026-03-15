@@ -4,8 +4,8 @@
 use anyhow::{anyhow, Result};
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
@@ -19,32 +19,52 @@ pub enum WsClientMessage {
     #[serde(rename = "set_status")]
     SetStatus { status: String },
     #[serde(rename = "subscribe_presence")]
-    SubscribePresence { #[serde(rename = "userIds")] user_ids: Vec<String> },
+    SubscribePresence {
+        #[serde(rename = "userIds")]
+        user_ids: Vec<String>,
+    },
     #[serde(rename = "unsubscribe_presence")]
-    UnsubscribePresence { #[serde(rename = "userIds")] user_ids: Vec<String> },
+    UnsubscribePresence {
+        #[serde(rename = "userIds")]
+        user_ids: Vec<String>,
+    },
     #[serde(rename = "subscribe_server_room")]
     SubscribeServerRoom {
-        #[serde(rename = "serverId")] server_id: String,
-        #[serde(rename = "roomId")] room_id: Option<String>,
+        #[serde(rename = "serverId")]
+        server_id: String,
+        #[serde(rename = "roomId")]
+        room_id: Option<String>,
     },
     #[serde(rename = "unsubscribe_server_room")]
     UnsubscribeServerRoom {
-        #[serde(rename = "serverId")] server_id: String,
-        #[serde(rename = "roomId")] room_id: Option<String>,
+        #[serde(rename = "serverId")]
+        server_id: String,
+        #[serde(rename = "roomId")]
+        room_id: Option<String>,
     },
     #[serde(rename = "typing_start")]
-    TypingStart { #[serde(rename = "conversationId")] conversation_id: String },
+    TypingStart {
+        #[serde(rename = "conversationId")]
+        conversation_id: String,
+    },
     #[serde(rename = "typing_stop")]
-    TypingStop { #[serde(rename = "conversationId")] conversation_id: String },
+    TypingStop {
+        #[serde(rename = "conversationId")]
+        conversation_id: String,
+    },
     #[serde(rename = "typing_room_start")]
     TypingRoomStart {
-        #[serde(rename = "serverId")] server_id: String,
-        #[serde(rename = "roomId")] room_id: String,
+        #[serde(rename = "serverId")]
+        server_id: String,
+        #[serde(rename = "roomId")]
+        room_id: String,
     },
     #[serde(rename = "typing_room_stop")]
     TypingRoomStop {
-        #[serde(rename = "serverId")] server_id: String,
-        #[serde(rename = "roomId")] room_id: String,
+        #[serde(rename = "serverId")]
+        server_id: String,
+        #[serde(rename = "roomId")]
+        room_id: String,
     },
 }
 
@@ -54,7 +74,9 @@ pub enum WsClientMessage {
 #[allow(dead_code)]
 pub enum WsServerMessage {
     Pong,
-    Error { message: String },
+    Error {
+        message: String,
+    },
     FriendRequestReceived(serde_json::Value),
     FriendRequestAccepted(serde_json::Value),
     FriendOnline(serde_json::Value),
@@ -67,7 +89,10 @@ pub enum WsServerMessage {
     VoiceRoomUserLeft(serde_json::Value),
     ServerMemberJoined(serde_json::Value),
     ServerMemberLeft(serde_json::Value),
-    ServerEvent { event: String, payload: serde_json::Value },
+    ServerEvent {
+        event: String,
+        payload: serde_json::Value,
+    },
     Unknown,
 }
 
@@ -224,7 +249,8 @@ impl WsClient {
                         // Ping task for this connection
                         let ping_alive = inner_alive.clone();
                         let _ping_tx = user_recv_tx.clone();
-                        let (inner_send_tx, mut inner_send_rx) = mpsc::unbounded_channel::<WsClientMessage>();
+                        let (inner_send_tx, mut inner_send_rx) =
+                            mpsc::unbounded_channel::<WsClientMessage>();
 
                         // Forward user sends to this connection's writer
                         let _fwd_alive = inner_alive.clone();
@@ -233,8 +259,12 @@ impl WsClient {
                             let mut interval = tokio::time::interval(Duration::from_secs(30));
                             loop {
                                 interval.tick().await;
-                                if !ping_alive.load(Ordering::Relaxed) { break; }
-                                if inner_send_tx2.send(WsClientMessage::Ping).is_err() { break; }
+                                if !ping_alive.load(Ordering::Relaxed) {
+                                    break;
+                                }
+                                if inner_send_tx2.send(WsClientMessage::Ping).is_err() {
+                                    break;
+                                }
                             }
                         });
 
@@ -288,7 +318,10 @@ impl WsClient {
                         inner_alive.store(false, Ordering::Relaxed);
                     }
                     Err(e) => {
-                        debug!("WebSocket connection failed: {}, retrying in {:?}", e, backoff);
+                        debug!(
+                            "WebSocket connection failed: {}, retrying in {:?}",
+                            e, backoff
+                        );
                     }
                 }
 
@@ -377,7 +410,8 @@ mod tests {
 
     #[test]
     fn parse_friend_status_changed() {
-        let msg = WsServerMessage::parse(r#"{"type":"friend_status_changed","status":"away"}"#).unwrap();
+        let msg =
+            WsServerMessage::parse(r#"{"type":"friend_status_changed","status":"away"}"#).unwrap();
         assert!(matches!(msg, WsServerMessage::FriendStatusChanged(_)));
     }
 

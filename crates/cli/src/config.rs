@@ -29,7 +29,9 @@ impl Default for CliConfig {
 
 impl CliConfig {
     pub fn effective_api_url(&self) -> String {
-        self.api_url.clone().unwrap_or_else(|| DEFAULT_API_URL.to_string())
+        self.api_url
+            .clone()
+            .unwrap_or_else(|| DEFAULT_API_URL.to_string())
     }
 }
 

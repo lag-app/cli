@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: MIT
 
 mod app;
-mod theme;
 mod keybindings;
+mod theme;
 mod ui;
 pub mod widgets;
 
+use crate::auth;
 use anyhow::Result;
 use app::{App, AppEvent};
 use crossterm::event::{self, Event};
-use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use crossterm::execute;
+use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::prelude::*;
 use std::io;
-use crate::auth;
 
 pub async fn run(_server: Option<String>) -> Result<()> {
     let creds = auth::require_auth()?;
@@ -69,7 +69,13 @@ async fn run_loop(
             while event::poll(std::time::Duration::from_millis(0))? {
                 if let Event::Key(key) = event::read()? {
                     if matches!(key.code, crossterm::event::KeyCode::Char('q'))
-                        || matches!((key.code, key.modifiers), (crossterm::event::KeyCode::Char('c'), crossterm::event::KeyModifiers::CONTROL))
+                        || matches!(
+                            (key.code, key.modifiers),
+                            (
+                                crossterm::event::KeyCode::Char('c'),
+                                crossterm::event::KeyModifiers::CONTROL
+                            )
+                        )
                     {
                         return Ok(());
                     }

@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use super::app::{App, AppEvent, SidebarSection};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub fn handle_key(key: KeyEvent, app: &App) -> Option<AppEvent> {
     match (key.code, key.modifiers) {

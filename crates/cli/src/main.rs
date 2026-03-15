@@ -7,8 +7,8 @@ mod auth;
 mod cli;
 mod commands;
 mod config;
-mod ws;
 mod tui;
+mod ws;
 
 use clap::Parser;
 use cli::Cli;

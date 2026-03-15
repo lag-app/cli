@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
+use crate::config;
 use anyhow::Result;
 use lag_voice_core::{AudioEngine, AudioSettings};
-use crate::config;
 use std::io::{self, Write};
 
 fn read_line() -> String {
@@ -157,7 +157,9 @@ pub async fn run() -> Result<()> {
                 let mut buf = vec![0.0f32; 4800];
                 loop {
                     let count = test_engine.read_capture_buffer(&mut buf);
-                    if count == 0 { break; }
+                    if count == 0 {
+                        break;
+                    }
                     recorded.extend_from_slice(&buf[..count]);
                 }
                 let _ = test_engine.stop_capture();

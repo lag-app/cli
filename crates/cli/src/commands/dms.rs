@@ -1,11 +1,11 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
-use anyhow::Result;
 use crate::api::ApiClient;
 use crate::auth;
 use crate::cli::DmsAction;
 use crate::ws::{WsClient, WsServerMessage};
+use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use crossterm::terminal;
 use std::io::Write;
@@ -17,9 +17,7 @@ pub async fn run(action: Option<DmsAction>) -> Result<()> {
     match action {
         None => list_conversations(&mut api).await,
         Some(DmsAction::Open { username }) => open_dm(&mut api, &username).await,
-        Some(DmsAction::Send { username, message }) => {
-            send_dm(&mut api, &username, &message).await
-        }
+        Some(DmsAction::Send { username, message }) => send_dm(&mut api, &username, &message).await,
     }
 }
 
@@ -38,7 +36,12 @@ async fn list_conversations(api: &mut ApiClient) -> Result<()> {
         let last_msg = conv["lastMessage"]["content"].as_str().unwrap_or("");
 
         if unread > 0 {
-            println!("  {} ({} new) - {}", username, unread, truncate(last_msg, 50));
+            println!(
+                "  {} ({} new) - {}",
+                username,
+                unread,
+                truncate(last_msg, 50)
+            );
         } else {
             println!("  {} - {}", username, truncate(last_msg, 50));
         }
@@ -153,9 +156,7 @@ async fn find_or_create_conversation(
     username: &str,
 ) -> Result<serde_json::Value> {
     // Search for user first
-    let users: Vec<serde_json::Value> = api
-        .get(&format!("/users/search?q={}", username))
-        .await?;
+    let users: Vec<serde_json::Value> = api.get(&format!("/users/search?q={}", username)).await?;
 
     let user = users
         .iter()
@@ -171,13 +172,15 @@ async fn find_or_create_conversation(
 }
 
 fn print_message(msg: &serde_json::Value) {
-    let name = msg["displayName"].as_str()
+    let name = msg["displayName"]
+        .as_str()
         .or_else(|| msg["display_name"].as_str())
         .filter(|s| !s.is_empty())
         .or_else(|| msg["username"].as_str())
         .unwrap_or("?");
     let content = msg["content"].as_str().unwrap_or("");
-    let created_at = msg["createdAt"].as_str()
+    let created_at = msg["createdAt"]
+        .as_str()
         .or_else(|| msg["created_at"].as_str())
         .unwrap_or("");
     let time = format_time(created_at);

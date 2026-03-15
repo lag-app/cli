@@ -1,13 +1,13 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
-use anyhow::Result;
-use lag_voice_core::{AudioEngine, AudioSettings, VoiceRoom, VoiceEvent};
-use parking_lot::Mutex;
-use std::sync::Arc;
 use crate::api::ApiClient;
 use crate::config::{self, Credentials};
 use crate::ws::{WsClient, WsServerMessage};
+use anyhow::Result;
+use lag_voice_core::{AudioEngine, AudioSettings, VoiceEvent, VoiceRoom};
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SidebarSection {
@@ -170,7 +170,7 @@ pub struct App {
     pub voice_token_rx: Option<tokio::sync::oneshot::Receiver<Result<serde_json::Value>>>,
     pub voice_connect_room_id: Option<String>,
     pub pending_voice_token: Option<Result<serde_json::Value>>,
-    pub voice_participants: Vec<(String, String)>,  // (user_id, display_name)
+    pub voice_participants: Vec<(String, String)>, // (user_id, display_name)
     pub voice_speaking: std::collections::HashSet<String>,
     pub mic_level: f32,
     pub output_level: f32,
@@ -252,9 +252,11 @@ impl App {
             let auth = format!("Bearer {}", token);
 
             let _ = tx.send(InitUpdate::Status("Authenticating...".into()));
-            let user_resp = client.get(format!("{}/users/me", base_url))
+            let user_resp = client
+                .get(format!("{}/users/me", base_url))
                 .header("Authorization", &auth)
-                .send().await;
+                .send()
+                .await;
             let username = match user_resp {
                 Ok(r) if r.status().is_success() => {
                     let body: serde_json::Value = r.json().await.unwrap_or_default();
@@ -263,7 +265,10 @@ impl App {
                 Ok(r) => {
                     let status = r.status();
                     let text = r.text().await.unwrap_or_default();
-                    let _ = tx.send(InitUpdate::Error(format!("Auth failed ({}): {}", status, text)));
+                    let _ = tx.send(InitUpdate::Error(format!(
+                        "Auth failed ({}): {}",
+                        status, text
+                    )));
                     return;
                 }
                 Err(e) => {
@@ -273,7 +278,9 @@ impl App {
             };
 
             async fn fetch_json<T: serde::de::DeserializeOwned + Default>(
-                client: &reqwest::Client, url: String, auth: &str
+                client: &reqwest::Client,
+                url: String,
+                auth: &str,
             ) -> T {
                 match client.get(&url).header("Authorization", auth).send().await {
                     Ok(r) if r.status().is_success() => r.json::<T>().await.unwrap_or_default(),
@@ -282,14 +289,18 @@ impl App {
             }
 
             let _ = tx.send(InitUpdate::Status("Loading servers...".into()));
-            let servers: Vec<serde_json::Value> = fetch_json(&client, format!("{}/servers/me", base_url), &auth).await;
+            let servers: Vec<serde_json::Value> =
+                fetch_json(&client, format!("{}/servers/me", base_url), &auth).await;
 
             let _ = tx.send(InitUpdate::Status("Loading friends...".into()));
-            let friends: Vec<serde_json::Value> = fetch_json(&client, format!("{}/friends", base_url), &auth).await;
-            let friend_requests: serde_json::Value = fetch_json(&client, format!("{}/friends/requests", base_url), &auth).await;
+            let friends: Vec<serde_json::Value> =
+                fetch_json(&client, format!("{}/friends", base_url), &auth).await;
+            let friend_requests: serde_json::Value =
+                fetch_json(&client, format!("{}/friends/requests", base_url), &auth).await;
 
             let _ = tx.send(InitUpdate::Status("Loading conversations...".into()));
-            let dms: Vec<serde_json::Value> = fetch_json(&client, format!("{}/dms", base_url), &auth).await;
+            let dms: Vec<serde_json::Value> =
+                fetch_json(&client, format!("{}/dms", base_url), &auth).await;
 
             let _ = tx.send(InitUpdate::Done {
                 username,
@@ -308,7 +319,13 @@ impl App {
                     InitUpdate::Status(msg) => {
                         self.loading = Some(msg);
                     }
-                    InitUpdate::Done { username, servers, friends, friend_requests, dms } => {
+                    InitUpdate::Done {
+                        username,
+                        servers,
+                        friends,
+                        friend_requests,
+                        dms,
+                    } => {
                         self.username = username;
                         self.servers = servers;
                         self.friends = friends;
@@ -316,9 +333,12 @@ impl App {
                         self.dms = dms;
 
                         self.loading = Some("Connecting websocket...".into());
-                        self.ws = WsClient::connect_persistent(self.api.base_url(), self.api.access_token())
-                            .await
-                            .ok();
+                        self.ws = WsClient::connect_persistent(
+                            self.api.base_url(),
+                            self.api.access_token(),
+                        )
+                        .await
+                        .ok();
 
                         self.loading = None;
                         self.init_rx = None;
@@ -340,10 +360,15 @@ impl App {
             return String::new();
         };
         let diff = chrono::Utc::now().signed_duration_since(dt);
-        if diff.num_seconds() < 60 { "now".into() }
-        else if diff.num_minutes() < 60 { format!("{}m", diff.num_minutes()) }
-        else if diff.num_hours() < 24 { format!("{}h", diff.num_hours()) }
-        else { format!("{}d", diff.num_days()) }
+        if diff.num_seconds() < 60 {
+            "now".into()
+        } else if diff.num_minutes() < 60 {
+            format!("{}m", diff.num_minutes())
+        } else if diff.num_hours() < 24 {
+            format!("{}h", diff.num_hours())
+        } else {
+            format!("{}d", diff.num_days())
+        }
     }
 
     fn build_friend_entries(&mut self, requests: &serde_json::Value) {
@@ -355,13 +380,20 @@ impl App {
                 kind: FriendEntryKind::Friend,
                 username: f["user"]["username"].as_str().unwrap_or("?").to_string(),
                 display_name: f["user"]["displayName"].as_str().map(String::from),
-                status: f["user"]["status"].as_str().unwrap_or("offline").to_string(),
-                friendship_id: f["friendshipId"].as_str()
+                status: f["user"]["status"]
+                    .as_str()
+                    .unwrap_or("offline")
+                    .to_string(),
+                friendship_id: f["friendshipId"]
+                    .as_str()
                     .or_else(|| f["id"].as_str())
-                    .unwrap_or("").to_string(),
-                user_id: f["user"]["id"].as_str()
+                    .unwrap_or("")
+                    .to_string(),
+                user_id: f["user"]["id"]
+                    .as_str()
                     .or_else(|| f["id"].as_str())
-                    .unwrap_or("").to_string(),
+                    .unwrap_or("")
+                    .to_string(),
                 since: f["since"].as_str().map(String::from),
             });
         }
@@ -373,11 +405,16 @@ impl App {
                     kind: FriendEntryKind::IncomingRequest,
                     username: r["from"]["username"].as_str().unwrap_or("?").to_string(),
                     display_name: r["from"]["displayName"].as_str().map(String::from),
-                    status: r["from"]["status"].as_str().unwrap_or("offline").to_string(),
+                    status: r["from"]["status"]
+                        .as_str()
+                        .unwrap_or("offline")
+                        .to_string(),
                     friendship_id: r["id"].as_str().unwrap_or("").to_string(),
-                    user_id: r["from"]["id"].as_str()
+                    user_id: r["from"]["id"]
+                        .as_str()
                         .or_else(|| r["requesterId"].as_str())
-                        .unwrap_or("").to_string(),
+                        .unwrap_or("")
+                        .to_string(),
                     since: None,
                 });
             }
@@ -392,9 +429,11 @@ impl App {
                     display_name: r["to"]["displayName"].as_str().map(String::from),
                     status: r["to"]["status"].as_str().unwrap_or("offline").to_string(),
                     friendship_id: r["id"].as_str().unwrap_or("").to_string(),
-                    user_id: r["to"]["id"].as_str()
+                    user_id: r["to"]["id"]
+                        .as_str()
                         .or_else(|| r["addresseeId"].as_str())
-                        .unwrap_or("").to_string(),
+                        .unwrap_or("")
+                        .to_string(),
                     since: None,
                 });
             }
@@ -409,55 +448,64 @@ impl App {
 
     pub fn sidebar_items(&self) -> Vec<String> {
         match self.sidebar_section {
-            SidebarSection::Servers => {
-                match self.sidebar_view {
-                    SidebarView::ServerList => {
-                        self.servers.iter().map(|s| {
-                            let name = s["name"].as_str().unwrap_or("?");
-                            name.to_string()
-                        }).collect()
-                    }
-                    SidebarView::RoomList => {
-                        if let Some(ref detail) = self.selected_server {
-                            let mut items = vec![format!("< {}", detail.name)];
-                            for room in &detail.rooms {
-                                let name = room["name"].as_str().unwrap_or("?");
-                                let count = room["participants"]
-                                    .as_array()
-                                    .map(|p| p.len())
-                                    .unwrap_or(0);
-                                if count > 0 {
-                                    items.push(format!("  {} ({})", name, count));
-                                } else {
-                                    items.push(format!("  {}", name));
-                                }
+            SidebarSection::Servers => match self.sidebar_view {
+                SidebarView::ServerList => self
+                    .servers
+                    .iter()
+                    .map(|s| {
+                        let name = s["name"].as_str().unwrap_or("?");
+                        name.to_string()
+                    })
+                    .collect(),
+                SidebarView::RoomList => {
+                    if let Some(ref detail) = self.selected_server {
+                        let mut items = vec![format!("< {}", detail.name)];
+                        for room in &detail.rooms {
+                            let name = room["name"].as_str().unwrap_or("?");
+                            let count = room["participants"]
+                                .as_array()
+                                .map(|p| p.len())
+                                .unwrap_or(0);
+                            if count > 0 {
+                                items.push(format!("  {} ({})", name, count));
+                            } else {
+                                items.push(format!("  {}", name));
                             }
-                            items
-                        } else {
-                            vec![]
                         }
+                        items
+                    } else {
+                        vec![]
                     }
                 }
-            }
-            SidebarSection::Friends => {
-                self.friend_entries.iter().map(|e| e.label()).collect()
-            }
-            SidebarSection::Dms => {
-                self.dms.iter().map(|dm| {
+            },
+            SidebarSection::Friends => self.friend_entries.iter().map(|e| e.label()).collect(),
+            SidebarSection::Dms => self
+                .dms
+                .iter()
+                .map(|dm| {
                     let conv_id = dm["id"].as_str().unwrap_or("");
-                    let name = dm["otherUser"]["displayName"].as_str()
+                    let name = dm["otherUser"]["displayName"]
+                        .as_str()
                         .or_else(|| dm["otherUser"]["username"].as_str())
                         .unwrap_or("?");
                     let unread = self.dm_unread.get(conv_id).copied().unwrap_or(0);
-                    let preview = dm["lastMessage"]["content"].as_str()
-                        .map(|c| {
-                            let truncated: String = c.chars().take(20).collect();
-                            if c.len() > 20 { format!("{}...", truncated) } else { truncated }
-                        });
-                    let time = dm["lastMessage"]["createdAt"].as_str()
+                    let preview = dm["lastMessage"]["content"].as_str().map(|c| {
+                        let truncated: String = c.chars().take(20).collect();
+                        if c.len() > 20 {
+                            format!("{}...", truncated)
+                        } else {
+                            truncated
+                        }
+                    });
+                    let time = dm["lastMessage"]["createdAt"]
+                        .as_str()
                         .map(|t| {
                             let rel = Self::relative_time_short(t);
-                            if rel.is_empty() { String::new() } else { format!(" {}", rel) }
+                            if rel.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" {}", rel)
+                            }
                         })
                         .unwrap_or_default();
 
@@ -472,8 +520,8 @@ impl App {
                     } else {
                         format!("{}{}{}", unread_prefix, name, time)
                     }
-                }).collect()
-            }
+                })
+                .collect(),
         }
     }
 
@@ -500,14 +548,18 @@ impl App {
         match event {
             AppEvent::NavigateUp => {
                 if let Some(ref mut menu) = self.action_menu {
-                    if menu.selected > 0 { menu.selected -= 1; }
+                    if menu.selected > 0 {
+                        menu.selected -= 1;
+                    }
                 } else if self.selected_index > 0 {
                     self.selected_index -= 1;
                 }
             }
             AppEvent::NavigateDown => {
                 if let Some(ref mut menu) = self.action_menu {
-                    if menu.selected < menu.items.len() - 1 { menu.selected += 1; }
+                    if menu.selected < menu.items.len() - 1 {
+                        menu.selected += 1;
+                    }
                 } else {
                     let max = self.sidebar_item_count().saturating_sub(1);
                     if self.selected_index < max {
@@ -521,7 +573,11 @@ impl App {
             AppEvent::Back => {
                 if self.error_message.is_some() {
                     self.error_message = None;
-                } else if self.friend_popup.as_ref().is_some_and(|p| p.confirming.is_some()) {
+                } else if self
+                    .friend_popup
+                    .as_ref()
+                    .is_some_and(|p| p.confirming.is_some())
+                {
                     if let Some(ref mut popup) = self.friend_popup {
                         popup.confirming = None;
                     }
@@ -580,7 +636,9 @@ impl App {
             }
             AppEvent::ToggleDeafen => {
                 self.deafened = !self.deafened;
-                if self.deafened { self.muted = true; }
+                if self.deafened {
+                    self.muted = true;
+                }
                 if let Some(ref room) = self.voice_room {
                     room.set_deafened(self.deafened);
                 }
@@ -619,12 +677,17 @@ impl App {
                 self.adding_friend = false;
                 self.add_friend_input.clear();
                 if !username.is_empty() {
-                    match self.api.post::<_, serde_json::Value>(
-                        "/friends/request",
-                        &serde_json::json!({ "username": username }),
-                    ).await {
+                    match self
+                        .api
+                        .post::<_, serde_json::Value>(
+                            "/friends/request",
+                            &serde_json::json!({ "username": username }),
+                        )
+                        .await
+                    {
                         Ok(_) => {
-                            self.error_message = Some(format!("Friend request sent to {}", username));
+                            self.error_message =
+                                Some(format!("Friend request sent to {}", username));
                             self.reload_friends().await;
                         }
                         Err(e) => {
@@ -689,7 +752,9 @@ impl App {
     /// Drain all pending async events without blocking.
     pub fn drain_async_events(&mut self) {
         // Collect all pending events first to avoid borrow conflicts
-        let voice_events: Vec<_> = self.voice_event_rx.as_mut()
+        let voice_events: Vec<_> = self
+            .voice_event_rx
+            .as_mut()
             .map(|rx| {
                 let mut events = Vec::new();
                 while let Ok(evt) = rx.try_recv() {
@@ -699,7 +764,9 @@ impl App {
             })
             .unwrap_or_default();
 
-        let ws_events: Vec<_> = self.ws.as_mut()
+        let ws_events: Vec<_> = self
+            .ws
+            .as_mut()
             .map(|ws| {
                 let mut events = Vec::new();
                 while let Some(msg) = ws.try_recv() {
@@ -757,7 +824,12 @@ impl App {
                     self.selected_room_id = None;
                     self.selected_room_name = None;
                 }
-                ContentLoadResult::RoomMessages { server_id, room_id, room_name, messages } => {
+                ContentLoadResult::RoomMessages {
+                    server_id,
+                    room_id,
+                    room_name,
+                    messages,
+                } => {
                     self.messages = messages;
                     self.selected_room_id = Some(room_id.clone());
                     self.selected_room_name = Some(room_name);
@@ -768,7 +840,11 @@ impl App {
                         });
                     }
                 }
-                ContentLoadResult::DmMessages { dm_id, dm_name, messages } => {
+                ContentLoadResult::DmMessages {
+                    dm_id,
+                    dm_name,
+                    messages,
+                } => {
                     self.messages = messages;
                     self.dm_unread.remove(&dm_id);
                     self.selected_dm_id = Some(dm_id);
@@ -795,15 +871,18 @@ impl App {
     }
 
     fn start_join_voice(&mut self) {
-        let (room_id, connect_msg) = match (&self.selected_server, &self.selected_room_id, &self.selected_room_name) {
+        let (room_id, connect_msg) = match (
+            &self.selected_server,
+            &self.selected_room_id,
+            &self.selected_room_name,
+        ) {
             (Some(detail), Some(room_id), Some(room_name)) => (
                 room_id.clone(),
                 format!("Connecting to {} → {}", detail.name, room_name),
             ),
-            (Some(detail), Some(room_id), None) => (
-                room_id.clone(),
-                format!("Connecting to {}...", detail.name),
-            ),
+            (Some(detail), Some(room_id), None) => {
+                (room_id.clone(), format!("Connecting to {}...", detail.name))
+            }
             _ => return,
         };
 
@@ -830,10 +909,10 @@ impl App {
                 .await;
 
             let outcome = match result {
-                Ok(resp) if resp.status().is_success() => {
-                    resp.json::<serde_json::Value>().await
-                        .map_err(|e| anyhow::anyhow!("{}", e))
-                }
+                Ok(resp) if resp.status().is_success() => resp
+                    .json::<serde_json::Value>()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("{}", e)),
                 Ok(resp) => {
                     let status = resp.status();
                     let text = resp.text().await.unwrap_or_default();
@@ -846,9 +925,11 @@ impl App {
     }
 
     pub async fn finish_join_voice(&mut self, token_resp: serde_json::Value) -> Result<()> {
-        let voice_url = token_resp["voiceUrl"].as_str()
+        let voice_url = token_resp["voiceUrl"]
+            .as_str()
             .ok_or_else(|| anyhow::anyhow!("No voice URL"))?;
-        let voice_token = token_resp["participantToken"].as_str()
+        let voice_token = token_resp["participantToken"]
+            .as_str()
             .ok_or_else(|| anyhow::anyhow!("No voice token"))?;
 
         let participants_json = token_resp["room"]["participants"]
@@ -904,8 +985,17 @@ impl App {
         self.mic_level = 0.0;
         self.output_level = 0.0;
 
-        if let (Some(ref _detail), Some(ref room_id)) = (&self.selected_server, &self.connected_room.clone().and_then(|_| self.selected_room_id.clone())) {
-            let _ = self.api.delete_no_body(&format!("/voice/rooms/{}/leave", room_id)).await;
+        if let (Some(ref _detail), Some(ref room_id)) = (
+            &self.selected_server,
+            &self
+                .connected_room
+                .clone()
+                .and_then(|_| self.selected_room_id.clone()),
+        ) {
+            let _ = self
+                .api
+                .delete_no_body(&format!("/voice/rooms/{}/leave", room_id))
+                .await;
         }
 
         self.connected_room = None;
@@ -915,8 +1005,14 @@ impl App {
     fn handle_voice_event(&mut self, evt: VoiceEvent) {
         match evt {
             VoiceEvent::Connected { participants } => {
-                self.voice_participants = participants.iter()
-                    .map(|p| (p.user_id.clone(), p.display_name.clone().unwrap_or_else(|| p.username.clone())))
+                self.voice_participants = participants
+                    .iter()
+                    .map(|p| {
+                        (
+                            p.user_id.clone(),
+                            p.display_name.clone().unwrap_or_else(|| p.username.clone()),
+                        )
+                    })
                     .collect();
             }
             VoiceEvent::ParticipantJoined { participant } => {
@@ -944,11 +1040,20 @@ impl App {
                 self.voice_speaking.clear();
                 self.connected_room = None;
             }
-            VoiceEvent::TrackMuted { user_id: _, muted: _ } => {}
+            VoiceEvent::TrackMuted {
+                user_id: _,
+                muted: _,
+            } => {}
             VoiceEvent::Reconnecting => {}
             VoiceEvent::Reconnected { participants } => {
-                self.voice_participants = participants.iter()
-                    .map(|p| (p.user_id.clone(), p.display_name.clone().unwrap_or_else(|| p.username.clone())))
+                self.voice_participants = participants
+                    .iter()
+                    .map(|p| {
+                        (
+                            p.user_id.clone(),
+                            p.display_name.clone().unwrap_or_else(|| p.username.clone()),
+                        )
+                    })
                     .collect();
             }
             VoiceEvent::MicLevel { level } => {
@@ -971,7 +1076,10 @@ impl App {
         };
 
         // Double-confirm for destructive actions
-        let needs_confirm = matches!(action.as_str(), "Remove friend" | "Block user" | "Cancel request");
+        let needs_confirm = matches!(
+            action.as_str(),
+            "Remove friend" | "Block user" | "Cancel request"
+        );
         if needs_confirm && confirming.as_deref() != Some(&action) {
             if let Some(ref mut popup) = self.friend_popup {
                 popup.confirming = Some(action);
@@ -981,22 +1089,34 @@ impl App {
 
         match action.as_str() {
             "Send DM" => {
-                let user_id = self.friend_popup.as_ref().map(|p| p.entry.user_id.clone()).unwrap_or_default();
-                let dm_name = self.friend_popup.as_ref().map(|p| {
-                    p.entry.display_name.clone().unwrap_or_else(|| p.entry.username.clone())
-                }).unwrap_or_default();
+                let user_id = self
+                    .friend_popup
+                    .as_ref()
+                    .map(|p| p.entry.user_id.clone())
+                    .unwrap_or_default();
+                let dm_name = self
+                    .friend_popup
+                    .as_ref()
+                    .map(|p| {
+                        p.entry
+                            .display_name
+                            .clone()
+                            .unwrap_or_else(|| p.entry.username.clone())
+                    })
+                    .unwrap_or_default();
                 self.friend_popup = None;
 
                 // Create or get DM conversation
                 self.loading = Some(format!("Opening DM with {}...", dm_name));
-                let result = self.api.post::<_, serde_json::Value>(
-                    "/dms",
-                    &serde_json::json!({ "userId": user_id }),
-                ).await;
+                let result = self
+                    .api
+                    .post::<_, serde_json::Value>("/dms", &serde_json::json!({ "userId": user_id }))
+                    .await;
                 match result {
                     Ok(conv) => {
                         let conv_id = conv["id"].as_str().unwrap_or("").to_string();
-                        let msgs: Vec<serde_json::Value> = self.api
+                        let msgs: Vec<serde_json::Value> = self
+                            .api
                             .get(&format!("/dms/{}/messages", conv_id))
                             .await
                             .unwrap_or_default();
@@ -1020,10 +1140,13 @@ impl App {
                 }
             }
             "Accept" => {
-                let result = self.api.post::<_, serde_json::Value>(
-                    "/friends/accept",
-                    &serde_json::json!({ "requestId": friendship_id }),
-                ).await;
+                let result = self
+                    .api
+                    .post::<_, serde_json::Value>(
+                        "/friends/accept",
+                        &serde_json::json!({ "requestId": friendship_id }),
+                    )
+                    .await;
                 self.friend_popup = None;
                 match result {
                     Ok(_) => self.reload_friends().await,
@@ -1031,10 +1154,13 @@ impl App {
                 }
             }
             "Decline" => {
-                let result = self.api.post::<_, serde_json::Value>(
-                    "/friends/decline",
-                    &serde_json::json!({ "requestId": friendship_id }),
-                ).await;
+                let result = self
+                    .api
+                    .post::<_, serde_json::Value>(
+                        "/friends/decline",
+                        &serde_json::json!({ "requestId": friendship_id }),
+                    )
+                    .await;
                 self.friend_popup = None;
                 match result {
                     Ok(_) => self.reload_friends().await,
@@ -1042,7 +1168,10 @@ impl App {
                 }
             }
             "Remove friend" | "Cancel request" => {
-                let result = self.api.delete_no_body(&format!("/friends/{}", friendship_id)).await;
+                let result = self
+                    .api
+                    .delete_no_body(&format!("/friends/{}", friendship_id))
+                    .await;
                 self.friend_popup = None;
                 match result {
                     Ok(_) => self.reload_friends().await,
@@ -1050,11 +1179,18 @@ impl App {
                 }
             }
             "Block user" => {
-                let user_id = self.friend_popup.as_ref().map(|p| p.entry.user_id.clone()).unwrap_or_default();
-                let result = self.api.post::<_, serde_json::Value>(
-                    "/friends/block",
-                    &serde_json::json!({ "userId": user_id }),
-                ).await;
+                let user_id = self
+                    .friend_popup
+                    .as_ref()
+                    .map(|p| p.entry.user_id.clone())
+                    .unwrap_or_default();
+                let result = self
+                    .api
+                    .post::<_, serde_json::Value>(
+                        "/friends/block",
+                        &serde_json::json!({ "userId": user_id }),
+                    )
+                    .await;
                 self.friend_popup = None;
                 match result {
                     Ok(_) => self.reload_friends().await,
@@ -1073,7 +1209,8 @@ impl App {
 
     pub async fn reload_friends(&mut self) {
         self.friends = self.api.get("/friends").await.unwrap_or_default();
-        let requests: serde_json::Value = self.api.get("/friends/requests").await.unwrap_or_default();
+        let requests: serde_json::Value =
+            self.api.get("/friends/requests").await.unwrap_or_default();
         self.build_friend_entries(&requests);
         if self.selected_index >= self.friend_entries.len() {
             self.selected_index = self.friend_entries.len().saturating_sub(1);
@@ -1106,93 +1243,103 @@ impl App {
     }
 
     async fn on_select(&mut self) -> Result<()> {
-        if self.content_loading.is_some() { return Ok(()); }
+        if self.content_loading.is_some() {
+            return Ok(());
+        }
 
         match self.sidebar_section {
-            SidebarSection::Servers => {
-                match self.sidebar_view {
-                    SidebarView::ServerList => {
-                        if let Some(server) = self.servers.get(self.selected_index) {
-                            let id = server["id"].as_str().unwrap_or("").to_string();
-                            let name = server["name"].as_str().unwrap_or("?").to_string();
+            SidebarSection::Servers => match self.sidebar_view {
+                SidebarView::ServerList => {
+                    if let Some(server) = self.servers.get(self.selected_index) {
+                        let id = server["id"].as_str().unwrap_or("").to_string();
+                        let name = server["name"].as_str().unwrap_or("?").to_string();
 
-                            self.content_loading = Some(format!("Loading {}...", name));
+                        self.content_loading = Some(format!("Loading {}...", name));
+                        let base_url = self.api.base_url().to_string();
+                        let token = self.api.access_token().to_string();
+                        let server_id = id.clone();
+                        let server_name = name.clone();
+                        let (tx, rx) = tokio::sync::oneshot::channel();
+                        self.content_load_rx = Some(rx);
+
+                        tokio::spawn(async move {
+                            let client = reqwest::Client::new();
+                            match client
+                                .get(format!("{}/servers/{}", base_url, server_id))
+                                .header("Authorization", format!("Bearer {}", token))
+                                .send()
+                                .await
+                            {
+                                Ok(resp) if resp.status().is_success() => {
+                                    let details: serde_json::Value =
+                                        resp.json().await.unwrap_or_default();
+                                    let rooms =
+                                        details["rooms"].as_array().cloned().unwrap_or_default();
+                                    let _ = tx.send(ContentLoadResult::ServerDetail {
+                                        id: server_id,
+                                        name: server_name,
+                                        rooms,
+                                    });
+                                }
+                                Ok(resp) => {
+                                    let text = resp.text().await.unwrap_or_default();
+                                    let _ = tx.send(ContentLoadResult::Error(text));
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(ContentLoadResult::Error(format!("{}", e)));
+                                }
+                            }
+                        });
+                    }
+                }
+                SidebarView::RoomList => {
+                    if self.selected_index == 0 {
+                        self.on_back().await;
+                        return Ok(());
+                    }
+                    if let Some(ref detail) = self.selected_server {
+                        let room_idx = self.selected_index - 1;
+                        if let Some(room) = detail.rooms.get(room_idx) {
+                            let room_id = room["id"].as_str().unwrap_or("").to_string();
+                            let room_name = room["name"].as_str().unwrap_or("?").to_string();
+                            let server_id = detail.id.clone();
+
+                            self.content_loading = Some(format!("Loading #{}...", room_name));
                             let base_url = self.api.base_url().to_string();
                             let token = self.api.access_token().to_string();
-                            let server_id = id.clone();
-                            let server_name = name.clone();
+                            let sid = server_id.clone();
+                            let rid = room_id.clone();
+                            let rname = room_name.clone();
                             let (tx, rx) = tokio::sync::oneshot::channel();
                             self.content_load_rx = Some(rx);
 
                             tokio::spawn(async move {
                                 let client = reqwest::Client::new();
-                                match client.get(format!("{}/servers/{}", base_url, server_id))
+                                let msgs: Vec<serde_json::Value> = match client
+                                    .get(format!(
+                                        "{}/servers/{}/rooms/{}/messages?limit=50",
+                                        base_url, sid, rid
+                                    ))
                                     .header("Authorization", format!("Bearer {}", token))
-                                    .send().await
+                                    .send()
+                                    .await
                                 {
                                     Ok(resp) if resp.status().is_success() => {
-                                        let details: serde_json::Value = resp.json().await.unwrap_or_default();
-                                        let rooms = details["rooms"].as_array().cloned().unwrap_or_default();
-                                        let _ = tx.send(ContentLoadResult::ServerDetail {
-                                            id: server_id,
-                                            name: server_name,
-                                            rooms,
-                                        });
+                                        resp.json().await.unwrap_or_default()
                                     }
-                                    Ok(resp) => {
-                                        let text = resp.text().await.unwrap_or_default();
-                                        let _ = tx.send(ContentLoadResult::Error(text));
-                                    }
-                                    Err(e) => {
-                                        let _ = tx.send(ContentLoadResult::Error(format!("{}", e)));
-                                    }
-                                }
+                                    _ => Vec::new(),
+                                };
+                                let _ = tx.send(ContentLoadResult::RoomMessages {
+                                    server_id: sid,
+                                    room_id: rid,
+                                    room_name: rname,
+                                    messages: msgs,
+                                });
                             });
                         }
                     }
-                    SidebarView::RoomList => {
-                        if self.selected_index == 0 {
-                            self.on_back().await;
-                            return Ok(());
-                        }
-                        if let Some(ref detail) = self.selected_server {
-                            let room_idx = self.selected_index - 1;
-                            if let Some(room) = detail.rooms.get(room_idx) {
-                                let room_id = room["id"].as_str().unwrap_or("").to_string();
-                                let room_name = room["name"].as_str().unwrap_or("?").to_string();
-                                let server_id = detail.id.clone();
-
-                                self.content_loading = Some(format!("Loading #{}...", room_name));
-                                let base_url = self.api.base_url().to_string();
-                                let token = self.api.access_token().to_string();
-                                let sid = server_id.clone();
-                                let rid = room_id.clone();
-                                let rname = room_name.clone();
-                                let (tx, rx) = tokio::sync::oneshot::channel();
-                                self.content_load_rx = Some(rx);
-
-                                tokio::spawn(async move {
-                                    let client = reqwest::Client::new();
-                                    let msgs: Vec<serde_json::Value> = match client
-                                        .get(format!("{}/servers/{}/rooms/{}/messages?limit=50", base_url, sid, rid))
-                                        .header("Authorization", format!("Bearer {}", token))
-                                        .send().await
-                                    {
-                                        Ok(resp) if resp.status().is_success() => resp.json().await.unwrap_or_default(),
-                                        _ => Vec::new(),
-                                    };
-                                    let _ = tx.send(ContentLoadResult::RoomMessages {
-                                        server_id: sid,
-                                        room_id: rid,
-                                        room_name: rname,
-                                        messages: msgs,
-                                    });
-                                });
-                            }
-                        }
-                    }
                 }
-            }
+            },
             SidebarSection::Friends => {
                 if let Some(entry) = self.friend_entries.get(self.selected_index).cloned() {
                     let actions = match entry.kind {
@@ -1208,10 +1355,9 @@ impl App {
                             "Block user".to_string(),
                             "Cancel".to_string(),
                         ],
-                        FriendEntryKind::OutgoingRequest => vec![
-                            "Cancel request".to_string(),
-                            "Cancel".to_string(),
-                        ],
+                        FriendEntryKind::OutgoingRequest => {
+                            vec!["Cancel request".to_string(), "Cancel".to_string()]
+                        }
                     };
                     self.friend_popup = Some(FriendPopup {
                         entry,
@@ -1224,7 +1370,8 @@ impl App {
             SidebarSection::Dms => {
                 if let Some(conv) = self.dms.get(self.selected_index).cloned() {
                     let id = conv["id"].as_str().unwrap_or("").to_string();
-                    let name = conv["otherUser"]["displayName"].as_str()
+                    let name = conv["otherUser"]["displayName"]
+                        .as_str()
                         .or_else(|| conv["otherUser"]["username"].as_str())
                         .unwrap_or("?")
                         .to_string();
@@ -1242,9 +1389,12 @@ impl App {
                         let msgs: Vec<serde_json::Value> = match client
                             .get(format!("{}/dms/{}/messages", base_url, dm_id))
                             .header("Authorization", format!("Bearer {}", token))
-                            .send().await
+                            .send()
+                            .await
                         {
-                            Ok(resp) if resp.status().is_success() => resp.json().await.unwrap_or_default(),
+                            Ok(resp) if resp.status().is_success() => {
+                                resp.json().await.unwrap_or_default()
+                            }
                             _ => Vec::new(),
                         };
                         let _ = tx.send(ContentLoadResult::DmMessages {
@@ -1283,8 +1433,15 @@ impl App {
         }
 
         // Build the URL for the POST
-        let url = if let (Some(ref detail), Some(ref room_id)) = (&self.selected_server, &self.selected_room_id) {
-            format!("{}/servers/{}/rooms/{}/messages", self.api.base_url(), detail.id, room_id)
+        let url = if let (Some(ref detail), Some(ref room_id)) =
+            (&self.selected_server, &self.selected_room_id)
+        {
+            format!(
+                "{}/servers/{}/rooms/{}/messages",
+                self.api.base_url(),
+                detail.id,
+                room_id
+            )
         } else if let Some(ref dm_id) = self.selected_dm_id {
             format!("{}/dms/{}/messages", self.api.base_url(), dm_id)
         } else {
@@ -1330,7 +1487,8 @@ impl App {
                 } else {
                     val
                 };
-                let msg_conv_id = dm_msg["conversationId"].as_str()
+                let msg_conv_id = dm_msg["conversationId"]
+                    .as_str()
                     .or_else(|| dm_msg["conversation_id"].as_str())
                     .unwrap_or("")
                     .to_string();
@@ -1358,7 +1516,8 @@ impl App {
             }
             WsServerMessage::RoomMessage(val) => {
                 if let Some(ref room_id) = self.selected_room_id {
-                    let msg_room_id = val["roomId"].as_str()
+                    let msg_room_id = val["roomId"]
+                        .as_str()
                         .or_else(|| val["room_id"].as_str())
                         .unwrap_or("");
                     if msg_room_id == room_id {
@@ -1369,7 +1528,8 @@ impl App {
             WsServerMessage::ServerEvent { event, payload } => {
                 if event.as_str() == "room_message" {
                     if let Some(ref room_id) = self.selected_room_id {
-                        let msg_room_id = payload["room_id"].as_str()
+                        let msg_room_id = payload["room_id"]
+                            .as_str()
                             .or_else(|| payload["roomId"].as_str())
                             .unwrap_or("");
                         if msg_room_id == room_id {
@@ -1378,8 +1538,8 @@ impl App {
                     }
                 }
             }
-            WsServerMessage::FriendRequestReceived(_) |
-            WsServerMessage::FriendRequestAccepted(_) => {
+            WsServerMessage::FriendRequestReceived(_)
+            | WsServerMessage::FriendRequestAccepted(_) => {
                 self.pending_friend_reload = true;
             }
             WsServerMessage::FriendOnline(val) => {

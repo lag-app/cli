@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
-use anyhow::Result;
 use crate::api::ApiClient;
 use crate::auth;
 use crate::config;
+use anyhow::Result;
 
 pub async fn run() -> Result<()> {
     if config::load_credentials().is_some() {
