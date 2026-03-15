@@ -187,49 +187,58 @@ jobs:
           echo "SHA256 sums:"
           sha256sum release-assets/*.tar.gz
       - name: Update formula
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          SHA_DARWIN_AARCH64=$(sha256sum release-assets/lag-${{ inputs.version }}-darwin-aarch64.tar.gz | cut -d' ' -f1)
-          SHA_DARWIN_X86_64=$(sha256sum release-assets/lag-${{ inputs.version }}-darwin-x86_64.tar.gz | cut -d' ' -f1)
-          SHA_LINUX_AMD64=$(sha256sum release-assets/lag-${{ inputs.version }}-linux-amd64.tar.gz | cut -d' ' -f1)
-          SHA_LINUX_ARM64=$(sha256sum release-assets/lag-${{ inputs.version }}-linux-arm64.tar.gz | cut -d' ' -f1)
+          SHA_DARWIN_AARCH64=$(sha256sum release-assets/lag-${VERSION}-darwin-aarch64.tar.gz | cut -d' ' -f1)
+          SHA_DARWIN_X86_64=$(sha256sum release-assets/lag-${VERSION}-darwin-x86_64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_AMD64=$(sha256sum release-assets/lag-${VERSION}-linux-amd64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_ARM64=$(sha256sum release-assets/lag-${VERSION}-linux-arm64.tar.gz | cut -d' ' -f1)
 
           mkdir -p homebrew-tap/Formula
-          cat > homebrew-tap/Formula/lag.rb <<FORMULA
-class Lag < Formula
-  desc "Terminal client for Lag voice chat"
-  homepage "https://trylag.com"
-  version "${{ inputs.version }}"
-  license "MIT"
+          export SHA_DARWIN_AARCH64 SHA_DARWIN_X86_64 SHA_LINUX_AMD64 SHA_LINUX_ARM64
+          VER="${VERSION}"
+          REPO="lag-app/cli"
+          BASE="https://github.com/${REPO}/releases/download/v${VER}"
+          {
+            echo 'class Lag < Formula'
+            echo '  desc "Terminal client for Lag voice chat"'
+            echo '  homepage "https://trylag.com"'
+            echo "  version \"${VER}\""
+            echo '  license "MIT"'
+            echo ''
+            echo '  on_macos do'
+            echo '    if Hardware::CPU.arm?'
+            echo "      url \"${BASE}/lag-${VER}-darwin-aarch64.tar.gz\""
+            echo "      sha256 \"${SHA_DARWIN_AARCH64}\""
+            echo '    else'
+            echo "      url \"${BASE}/lag-${VER}-darwin-x86_64.tar.gz\""
+            echo "      sha256 \"${SHA_DARWIN_X86_64}\""
+            echo '    end'
+            echo '  end'
+            echo ''
+            echo '  on_linux do'
+            echo '    if Hardware::CPU.arm?'
+            echo "      url \"${BASE}/lag-${VER}-linux-arm64.tar.gz\""
+            echo "      sha256 \"${SHA_LINUX_ARM64}\""
+            echo '    else'
+            echo "      url \"${BASE}/lag-${VER}-linux-amd64.tar.gz\""
+            echo "      sha256 \"${SHA_LINUX_AMD64}\""
+            echo '    end'
+            echo '  end'
+            echo ''
+            echo '  def install'
+            echo '    bin.install "lag"'
+            echo '  end'
+            echo ''
+            echo '  test do'
+            echo '    assert_match version.to_s, shell_output("#{bin}/lag --version")'
+            echo '  end'
+            echo 'end'
+          } > homebrew-tap/Formula/lag.rb
 
-  on_macos do
-    if Hardware::CPU.arm?
-      url "https://github.com/lag-app/cli/releases/download/v${{ inputs.version }}/lag-${{ inputs.version }}-darwin-aarch64.tar.gz"
-      sha256 "${SHA_DARWIN_AARCH64}"
-    else
-      url "https://github.com/lag-app/cli/releases/download/v${{ inputs.version }}/lag-${{ inputs.version }}-darwin-x86_64.tar.gz"
-      sha256 "${SHA_DARWIN_X86_64}"
-    end
-  end
-
-  on_linux do
-    if Hardware::CPU.arm?
-      url "https://github.com/lag-app/cli/releases/download/v${{ inputs.version }}/lag-${{ inputs.version }}-linux-arm64.tar.gz"
-      sha256 "${SHA_LINUX_ARM64}"
-    else
-      url "https://github.com/lag-app/cli/releases/download/v${{ inputs.version }}/lag-${{ inputs.version }}-linux-amd64.tar.gz"
-      sha256 "${SHA_LINUX_AMD64}"
-    end
-  end
-
-  def install
-    bin.install "lag"
-  end
-
-  test do
-    assert_match version.to_s, shell_output("#{bin}/lag --version")
-  end
-end
-FORMULA
+          echo "Generated formula:"
+          cat homebrew-tap/Formula/lag.rb
       - name: Commit and push
         run: |
           cd homebrew-tap
