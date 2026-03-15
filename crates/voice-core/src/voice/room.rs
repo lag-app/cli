@@ -364,7 +364,7 @@ impl VoiceRoom {
                         let _ = source.capture_frame(&silent_frame).await;
                         accumulator.clear();
                         level_counter += 1;
-                        if level_counter % 20 == 0 {
+                        if level_counter.is_multiple_of(20) {
                             let _ = event_tx.send(VoiceEvent::MicLevel { level: 0.0 });
                         }
                         continue;
@@ -380,7 +380,7 @@ impl VoiceRoom {
 
                         // Compute RMS for VU meter (~10Hz)
                         level_counter += 1;
-                        if level_counter % 5 == 0 {
+                        if level_counter.is_multiple_of(5) {
                             let rms = (frame_data.iter().map(|s| s * s).sum::<f32>() / frame_data.len() as f32).sqrt();
                             let level = (rms * 5.0).min(1.0); // scale up for visibility
                             let _ = event_tx.send(VoiceEvent::MicLevel { level });
@@ -627,7 +627,7 @@ impl VoiceRoom {
                 .collect();
 
             level_counter += 1;
-            if level_counter % 5 == 0 {
+            if level_counter.is_multiple_of(5) {
                 let rms = (f32_data.iter().map(|s| s * s).sum::<f32>() / f32_data.len().max(1) as f32).sqrt();
                 let level = (rms * 5.0).min(1.0);
                 let _ = event_tx.send(VoiceEvent::OutputLevel { level });
@@ -637,5 +637,53 @@ impl VoiceRoom {
         }
 
         info!(%participant_id, "Playback loop ended for remote participant");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn participant_info_serde_roundtrip() {
+        let info = ParticipantInfo {
+            user_id: "u123".to_string(),
+            username: "alice".to_string(),
+            display_name: Some("Alice".to_string()),
+            avatar_url: Some("https://example.com/avatar.png".to_string()),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let restored: ParticipantInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.user_id, "u123");
+        assert_eq!(restored.username, "alice");
+        assert_eq!(restored.display_name.as_deref(), Some("Alice"));
+        assert_eq!(restored.avatar_url.as_deref(), Some("https://example.com/avatar.png"));
+    }
+
+    #[test]
+    fn voice_event_debug_format() {
+        let events: Vec<VoiceEvent> = vec![
+            VoiceEvent::Connected { participants: vec![] },
+            VoiceEvent::Disconnected { reason: "test".into() },
+            VoiceEvent::ParticipantJoined {
+                participant: ParticipantInfo {
+                    user_id: "u1".into(),
+                    username: "bob".into(),
+                    display_name: None,
+                    avatar_url: None,
+                },
+            },
+            VoiceEvent::ParticipantLeft { user_id: "u1".into() },
+            VoiceEvent::Speaking { user_id: "u1".into(), speaking: true },
+            VoiceEvent::TrackMuted { user_id: "u1".into(), muted: true },
+            VoiceEvent::Reconnecting,
+            VoiceEvent::Reconnected { participants: vec![] },
+            VoiceEvent::MicLevel { level: 0.5 },
+            VoiceEvent::OutputLevel { level: 0.3 },
+        ];
+        for event in &events {
+            let debug = format!("{:?}", event);
+            assert!(!debug.is_empty());
+        }
     }
 }

@@ -84,3 +84,61 @@ impl OpusCodec {
         self.frame_size
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn codec_creation() {
+        OpusCodec::new().expect("OpusCodec::new() should succeed");
+    }
+
+    #[test]
+    fn encode_silence() {
+        let mut codec = OpusCodec::new().unwrap();
+        let silence = vec![0.0f32; 960];
+        let encoded = codec.encode(&silence).unwrap();
+        assert!(!encoded.is_empty());
+    }
+
+    #[test]
+    fn encode_decode_roundtrip() {
+        let mut codec = OpusCodec::new().unwrap();
+        let silence = vec![0.0f32; 960];
+        let encoded = codec.encode(&silence).unwrap().to_vec();
+        let mut decoded = vec![0.0f32; 960];
+        let samples = codec.decode(&encoded, &mut decoded).unwrap();
+        assert_eq!(samples, 960);
+    }
+
+    #[test]
+    fn decode_loss_concealment() {
+        let mut codec = OpusCodec::new().unwrap();
+        // First encode/decode a frame so the decoder has state
+        let silence = vec![0.0f32; 960];
+        let encoded = codec.encode(&silence).unwrap().to_vec();
+        let mut buf = vec![0.0f32; 960];
+        codec.decode(&encoded, &mut buf).unwrap();
+        // Now test PLC
+        let mut plc_buf = vec![0.0f32; 960];
+        let samples = codec.decode_loss(&mut plc_buf).unwrap();
+        assert_eq!(samples, 960);
+    }
+
+    #[test]
+    fn frame_size_is_960() {
+        let codec = OpusCodec::new().unwrap();
+        assert_eq!(codec.frame_size(), 960);
+    }
+
+    #[test]
+    fn encode_sine_wave() {
+        let mut codec = OpusCodec::new().unwrap();
+        let sine: Vec<f32> = (0..960)
+            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 48000.0).sin() * 0.5)
+            .collect();
+        let encoded = codec.encode(&sine).unwrap();
+        assert!(!encoded.is_empty());
+    }
+}

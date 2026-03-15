@@ -10,6 +10,12 @@ pub struct Denoiser {
     state: Box<DenoiseState<'static>>,
 }
 
+impl Default for Denoiser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Denoiser {
     pub fn new() -> Self {
         debug!("Noise suppression initialized (nnnoiseless, 48kHz)");
@@ -49,5 +55,42 @@ impl Denoiser {
         second_half.copy_from_slice(&input[second_start..second_end]);
         self.process(&mut second_half);
         input[second_start..second_end].copy_from_slice(&second_half);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn denoiser_creation() {
+        let _d = Denoiser::new();
+    }
+
+    #[test]
+    fn process_10ms_frame() {
+        let mut d = Denoiser::new();
+        let mut frame = vec![0.0f32; 480];
+        d.process(&mut frame);
+        assert!(frame.iter().all(|s| s.is_finite()));
+    }
+
+    #[test]
+    fn process_20ms_frame() {
+        let mut d = Denoiser::new();
+        let mut frame = vec![0.0f32; 960];
+        d.process_frame_20ms(&mut frame);
+        assert!(frame.iter().all(|s| s.is_finite()));
+    }
+
+    #[test]
+    fn denoise_does_not_amplify() {
+        let mut d = Denoiser::new();
+        // Use low-level noise as input
+        let mut frame: Vec<f32> = (0..480).map(|i| (i as f32 * 0.001).sin() * 0.1).collect();
+        let input_rms = (frame.iter().map(|s| s * s).sum::<f32>() / frame.len() as f32).sqrt();
+        d.process(&mut frame);
+        let output_rms = (frame.iter().map(|s| s * s).sum::<f32>() / frame.len() as f32).sqrt();
+        assert!(output_rms <= input_rms * 1.5, "output RMS {} should not exceed 1.5x input RMS {}", output_rms, input_rms);
     }
 }

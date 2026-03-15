@@ -40,6 +40,9 @@ rand = "0.8"
 objc = "0.2"
 cocoa = "0.26"
 
+[dev-dependencies]
+tempfile = "3"
+
 [package.metadata.deb]
 maintainer = "Lag <hello@trylag.com>"
 copyright = "2026, Lag"

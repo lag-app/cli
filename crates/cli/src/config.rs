@@ -82,3 +82,69 @@ pub fn clear_credentials() -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_config_values() {
+        let config = CliConfig::default();
+        assert!(config.api_url.is_none());
+        assert!(config.ptt_key.is_none());
+        assert!((config.vad_threshold - 0.01).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn effective_api_url_default() {
+        let config = CliConfig::default();
+        assert_eq!(config.effective_api_url(), "https://api.trylag.com");
+    }
+
+    #[test]
+    fn effective_api_url_custom() {
+        let config = CliConfig {
+            api_url: Some("https://custom.example.com".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(config.effective_api_url(), "https://custom.example.com");
+    }
+
+    #[test]
+    fn credentials_serde_roundtrip() {
+        let creds = Credentials {
+            access_token: "access_123".to_string(),
+            refresh_token: "refresh_456".to_string(),
+        };
+        let json = serde_json::to_string(&creds).unwrap();
+        let restored: Credentials = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.access_token, "access_123");
+        assert_eq!(restored.refresh_token, "refresh_456");
+    }
+
+    #[test]
+    fn cli_config_serde_roundtrip() {
+        let config = CliConfig {
+            api_url: Some("https://example.com".to_string()),
+            ptt_key: Some("KeyV".to_string()),
+            vad_threshold: 0.05,
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let restored: CliConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.api_url, config.api_url);
+        assert_eq!(restored.ptt_key, config.ptt_key);
+        assert!((restored.vad_threshold - 0.05).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn config_dir_returns_path() {
+        let dir = config_dir();
+        assert!(!dir.as_os_str().is_empty());
+        assert_eq!(dir.file_name().unwrap(), "lag");
+    }
+
+    #[test]
+    fn default_api_url_is_production() {
+        assert_eq!(DEFAULT_API_URL, "https://api.trylag.com");
+    }
+}

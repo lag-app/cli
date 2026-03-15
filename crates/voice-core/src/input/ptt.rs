@@ -15,7 +15,14 @@ struct PttState {
 
 pub struct PushToTalkManager {
     state: Arc<Mutex<PttState>>,
+    #[allow(clippy::type_complexity)]
     mute_callback: Arc<Mutex<Option<Box<dyn Fn(bool) + Send + Sync>>>>,
+}
+
+impl Default for PushToTalkManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PushToTalkManager {
@@ -335,5 +342,30 @@ mod tests {
         let s = key_to_string(&key).unwrap();
         let restored = string_to_key(s).unwrap();
         assert_eq!(format!("{:?}", key), format!("{:?}", restored));
+    }
+
+    #[test]
+    fn set_key_from_string_valid() {
+        let ptt = PushToTalkManager::new();
+        assert!(ptt.set_key_from_string("KeyV"));
+    }
+
+    #[test]
+    fn set_key_from_string_invalid() {
+        let ptt = PushToTalkManager::new();
+        assert!(!ptt.set_key_from_string("NotARealKey"));
+    }
+
+    #[test]
+    fn key_to_string_roundtrip_all() {
+        let keys = vec![
+            Key::Tab, Key::CapsLock, Key::ShiftLeft, Key::Space,
+            Key::F1, Key::F12, Key::KeyA, Key::KeyZ,
+        ];
+        for key in keys {
+            let s = key_to_string(&key).expect(&format!("key_to_string failed for {:?}", key));
+            let restored = string_to_key(s).expect(&format!("string_to_key failed for {}", s));
+            assert_eq!(format!("{:?}", key), format!("{:?}", restored));
+        }
     }
 }

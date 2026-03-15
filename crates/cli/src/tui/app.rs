@@ -521,7 +521,7 @@ impl App {
             AppEvent::Back => {
                 if self.error_message.is_some() {
                     self.error_message = None;
-                } else if self.friend_popup.as_ref().map_or(false, |p| p.confirming.is_some()) {
+                } else if self.friend_popup.as_ref().is_some_and(|p| p.confirming.is_some()) {
                     if let Some(ref mut popup) = self.friend_popup {
                         popup.confirming = None;
                     }
@@ -1367,18 +1367,15 @@ impl App {
                 }
             }
             WsServerMessage::ServerEvent { event, payload } => {
-                match event.as_str() {
-                    "room_message" => {
-                        if let Some(ref room_id) = self.selected_room_id {
-                            let msg_room_id = payload["room_id"].as_str()
-                                .or_else(|| payload["roomId"].as_str())
-                                .unwrap_or("");
-                            if msg_room_id == room_id {
-                                self.messages.push(payload);
-                            }
+                if event.as_str() == "room_message" {
+                    if let Some(ref room_id) = self.selected_room_id {
+                        let msg_room_id = payload["room_id"].as_str()
+                            .or_else(|| payload["roomId"].as_str())
+                            .unwrap_or("");
+                        if msg_room_id == room_id {
+                            self.messages.push(payload);
                         }
                     }
-                    _ => {}
                 }
             }
             WsServerMessage::FriendRequestReceived(_) |

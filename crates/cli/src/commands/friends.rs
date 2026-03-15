@@ -104,8 +104,8 @@ async fn show_requests(api: &mut ApiClient) -> Result<()> {
         }
     }
 
-    let empty = incoming.map_or(true, |i| i.is_empty())
-        && outgoing.map_or(true, |o| o.is_empty());
+    let empty = incoming.is_none_or(|i| i.is_empty())
+        && outgoing.is_none_or(|o| o.is_empty());
     if empty {
         println!("No pending friend requests.");
     }

@@ -200,9 +200,7 @@ fn draw_sidebar(f: &mut Frame, app: &App, area: Rect) {
     } else {
         " DMS ".to_string()
     };
-    let dms_style = if total_dm_unread > 0 {
-        Style::default().fg(theme::ACCENT)
-    } else if app.sidebar_section == SidebarSection::Dms {
+    let dms_style = if total_dm_unread > 0 || app.sidebar_section == SidebarSection::Dms {
         Style::default().fg(theme::ACCENT)
     } else {
         Style::default().fg(theme::TEXT_SECONDARY)

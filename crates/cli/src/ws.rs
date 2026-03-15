@@ -318,3 +318,101 @@ impl WsClient {
         self.recv_rx.try_recv().ok()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_pong() {
+        let msg = WsServerMessage::parse(r#"{"type":"pong"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::Pong));
+    }
+
+    #[test]
+    fn parse_error() {
+        let msg = WsServerMessage::parse(r#"{"type":"error","message":"bad token"}"#).unwrap();
+        match msg {
+            WsServerMessage::Error { message } => assert_eq!(message, "bad token"),
+            _ => panic!("expected Error"),
+        }
+    }
+
+    #[test]
+    fn parse_dm_message() {
+        let json = r#"{"type":"dm_message","content":"hello","from":"alice"}"#;
+        let msg = WsServerMessage::parse(json).unwrap();
+        match msg {
+            WsServerMessage::DmMessage(val) => {
+                assert_eq!(val["content"], "hello");
+                assert_eq!(val["from"], "alice");
+            }
+            _ => panic!("expected DmMessage"),
+        }
+    }
+
+    #[test]
+    fn parse_dm_typing() {
+        let msg = WsServerMessage::parse(r#"{"type":"dm_typing","userId":"u1"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::DmTyping(_)));
+    }
+
+    #[test]
+    fn parse_room_message() {
+        let msg = WsServerMessage::parse(r#"{"type":"room_message","text":"hi"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::RoomMessage(_)));
+    }
+
+    #[test]
+    fn parse_friend_online() {
+        let msg = WsServerMessage::parse(r#"{"type":"friend_online","userId":"u1"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::FriendOnline(_)));
+    }
+
+    #[test]
+    fn parse_friend_offline() {
+        let msg = WsServerMessage::parse(r#"{"type":"friend_offline","userId":"u1"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::FriendOffline(_)));
+    }
+
+    #[test]
+    fn parse_friend_status_changed() {
+        let msg = WsServerMessage::parse(r#"{"type":"friend_status_changed","status":"away"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::FriendStatusChanged(_)));
+    }
+
+    #[test]
+    fn parse_server_event() {
+        let json = r#"{"type":"server_event","event":"member_update","payload":{"id":"123"}}"#;
+        let msg = WsServerMessage::parse(json).unwrap();
+        match msg {
+            WsServerMessage::ServerEvent { event, payload } => {
+                assert_eq!(event, "member_update");
+                assert_eq!(payload["id"], "123");
+            }
+            _ => panic!("expected ServerEvent"),
+        }
+    }
+
+    #[test]
+    fn parse_unknown_type() {
+        let msg = WsServerMessage::parse(r#"{"type":"future_feature"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::Unknown));
+    }
+
+    #[test]
+    fn parse_invalid_json() {
+        assert!(WsServerMessage::parse("not json {{{").is_none());
+    }
+
+    #[test]
+    fn parse_missing_type() {
+        assert!(WsServerMessage::parse(r#"{"data":"no type field"}"#).is_none());
+    }
+
+    #[test]
+    fn client_message_ping_serializes() {
+        let json = serde_json::to_string(&WsClientMessage::Ping).unwrap();
+        assert!(json.contains(r#""type":"ping""#));
+    }
+}

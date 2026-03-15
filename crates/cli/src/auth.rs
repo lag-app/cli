@@ -120,7 +120,7 @@ fn wait_for_callback(server: tiny_http::Server, expected_state: &str) -> Result<
 pub async fn refresh_token(refresh_token: &str) -> Result<Credentials> {
     let client = reqwest::Client::new();
     let resp = client
-        .post(&format!("{}/auth/v1/token?grant_type=refresh_token", SUPABASE_URL))
+        .post(format!("{}/auth/v1/token?grant_type=refresh_token", SUPABASE_URL))
         .header("apikey", SUPABASE_ANON_KEY)
         .json(&serde_json::json!({ "refresh_token": refresh_token }))
         .send()

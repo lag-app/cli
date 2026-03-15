@@ -15,17 +15,30 @@ Terminal client for [Lag](https://trylag.com) voice chat. Join voice rooms, send
 
 ## Install
 
+### Quick install (macOS & Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lag-app/cli/main/install.sh | sh
+```
+
+This downloads the latest binary, installs it to `~/.lag/bin`, and adds it to your PATH. To install a specific version or custom directory:
+
+```bash
+LAG_VERSION=0.1.0 curl -fsSL https://raw.githubusercontent.com/lag-app/cli/main/install.sh | sh
+LAG_INSTALL_DIR=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/lag-app/cli/main/install.sh | sh
+```
+
 ### macOS (Homebrew)
 
 ```bash
-brew tap lagchat/tap
+brew tap lag-app/tap
 brew install lag
 ```
 
 ### Linux (Homebrew)
 
 ```bash
-brew tap lagchat/tap
+brew tap lag-app/tap
 brew install lag
 ```
 
@@ -44,7 +57,7 @@ cargo install --path crates/cli
 
 ### Pre-built binaries
 
-Download the latest release for your platform from the [Releases](https://github.com/lagchat/cli/releases) page.
+Download the latest release for your platform from the [Releases](https://github.com/lag-app/cli/releases) page.
 
 ## Commands
 

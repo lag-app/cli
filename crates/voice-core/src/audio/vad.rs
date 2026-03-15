@@ -13,6 +13,12 @@ pub struct VoiceActivityDetector {
     speaking: bool,
 }
 
+impl Default for VoiceActivityDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VoiceActivityDetector {
     pub fn new() -> Self {
         Self {

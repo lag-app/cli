@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 #[command(name = "lag", about = "Lag - terminal voice chat", version)]
 pub struct Cli {
     #[command(subcommand)]
-    command: Option<Commands>,
+    pub command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -201,5 +201,88 @@ impl Cli {
                 Ok(())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn parse_no_args() {
+        let cli = Cli::try_parse_from(["lag"]).unwrap();
+        assert!(cli.command.is_none());
+    }
+
+    #[test]
+    fn parse_login() {
+        let cli = Cli::try_parse_from(["lag", "login"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::Login)));
+    }
+
+    #[test]
+    fn parse_join_with_flags() {
+        let cli = Cli::try_parse_from([
+            "lag", "join", "my-server", "general",
+            "--ptt", "KeyV",
+            "--no-vad",
+            "--input-device", "Blue Yeti",
+            "--output-device", "Speakers",
+            "--with-chat",
+        ]).unwrap();
+        match cli.command {
+            Some(Commands::Join { server, room, ptt, no_vad, input_device, output_device, with_chat }) => {
+                assert_eq!(server, "my-server");
+                assert_eq!(room, "general");
+                assert_eq!(ptt.as_deref(), Some("KeyV"));
+                assert!(no_vad);
+                assert_eq!(input_device.as_deref(), Some("Blue Yeti"));
+                assert_eq!(output_device.as_deref(), Some("Speakers"));
+                assert!(with_chat);
+            }
+            _ => panic!("expected Join"),
+        }
+    }
+
+    #[test]
+    fn parse_config_set() {
+        let cli = Cli::try_parse_from(["lag", "config", "set", "api_url", "https://example.com"]).unwrap();
+        match cli.command {
+            Some(Commands::Config { action: Some(ConfigAction::Set { key, value }) }) => {
+                assert_eq!(key, "api_url");
+                assert_eq!(value, "https://example.com");
+            }
+            _ => panic!("expected Config Set"),
+        }
+    }
+
+    #[test]
+    fn parse_audio_volume() {
+        let cli = Cli::try_parse_from(["lag", "audio", "volume", "input", "75"]).unwrap();
+        match cli.command {
+            Some(Commands::Audio { action: Some(AudioAction::Volume { target, level }) }) => {
+                assert_eq!(target, "input");
+                assert_eq!(level, 75);
+            }
+            _ => panic!("expected Audio Volume"),
+        }
+    }
+
+    #[test]
+    fn parse_friends_add() {
+        let cli = Cli::try_parse_from(["lag", "friends", "add", "alice"]).unwrap();
+        match cli.command {
+            Some(Commands::Friends { action: Some(FriendsAction::Add { username }) }) => {
+                assert_eq!(username, "alice");
+            }
+            _ => panic!("expected Friends Add"),
+        }
+    }
+
+    #[test]
+    fn parse_ui() {
+        let cli = Cli::try_parse_from(["lag", "ui"]).unwrap();
+        assert!(matches!(cli.command, Some(Commands::Ui { server: None })));
     }
 }

@@ -55,6 +55,12 @@ pub struct AudioEngine {
 // precaution; WASAPI streams on Windows are safe when properly synchronized.
 unsafe impl Send for AudioEngine {}
 
+impl Default for AudioEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AudioEngine {
     pub fn new() -> Self {
         let host = cpal::default_host();

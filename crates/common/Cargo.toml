@@ -15,3 +15,6 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 dirs = "5"
+
+[dev-dependencies]
+tempfile = "3"

@@ -176,7 +176,7 @@ fn arrow_select(title: &str, items: &[String]) -> Result<usize> {
         if let Event::Key(key) = event::read()? {
             match (key.code, key.modifiers) {
                 (KeyCode::Up | KeyCode::Char('k'), _) => {
-                    if selected > 0 { selected -= 1; }
+                    selected = selected.saturating_sub(1);
                 }
                 (KeyCode::Down | KeyCode::Char('j'), _) => {
                     if selected < items.len() - 1 { selected += 1; }

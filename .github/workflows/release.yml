@@ -1,0 +1,185 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos-aarch64:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p lag-cli --release
+      - run: strip target/release/lag
+      - name: Create tarball
+        run: |
+          tar czf lag-${{ inputs.version }}-darwin-aarch64.tar.gz -C target/release lag
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lag-darwin-aarch64
+          path: lag-${{ inputs.version }}-darwin-aarch64.tar.gz
+
+  build-macos-x86_64:
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p lag-cli --release
+      - run: strip target/release/lag
+      - name: Create tarball
+        run: |
+          tar czf lag-${{ inputs.version }}-darwin-x86_64.tar.gz -C target/release lag
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lag-darwin-x86_64
+          path: lag-${{ inputs.version }}-darwin-x86_64.tar.gz
+
+  build-linux-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev cmake pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p lag-cli --release
+      - run: strip target/release/lag
+      - name: Create tarball
+        run: |
+          tar czf lag-${{ inputs.version }}-linux-amd64.tar.gz -C target/release lag
+      - name: Build deb package
+        run: |
+          cargo install cargo-deb
+          cargo deb -p lag-cli --no-build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lag-linux-amd64
+          path: |
+            lag-${{ inputs.version }}-linux-amd64.tar.gz
+            target/debian/*.deb
+
+  build-linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev cmake pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p lag-cli --release
+      - run: strip target/release/lag
+      - name: Create tarball
+        run: |
+          tar czf lag-${{ inputs.version }}-linux-arm64.tar.gz -C target/release lag
+      - name: Build deb package
+        run: |
+          cargo install cargo-deb
+          cargo deb -p lag-cli --no-build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lag-linux-arm64
+          path: |
+            lag-${{ inputs.version }}-linux-arm64.tar.gz
+            target/debian/*.deb
+
+  create-release:
+    needs: [build-macos-aarch64, build-macos-x86_64, build-linux-amd64, build-linux-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Compute checksums
+        run: |
+          cd artifacts
+          sha256sum lag-*.tar.gz *.deb > checksums-sha256.txt
+          cat checksums-sha256.txt
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd artifacts
+          CHECKSUMS=$(cat checksums-sha256.txt)
+          gh release create "v${{ inputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --title "v${{ inputs.version }}" \
+            --notes "## Checksums (SHA256)
+          \`\`\`
+          ${CHECKSUMS}
+          \`\`\`" \
+            lag-*.tar.gz *.deb checksums-sha256.txt
+
+  update-homebrew:
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: lag-app/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Update formula
+        run: |
+          SHA_DARWIN_AARCH64=$(sha256sum artifacts/lag-${{ inputs.version }}-darwin-aarch64.tar.gz | cut -d' ' -f1)
+          SHA_DARWIN_X86_64=$(sha256sum artifacts/lag-${{ inputs.version }}-darwin-x86_64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_AMD64=$(sha256sum artifacts/lag-${{ inputs.version }}-linux-amd64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_ARM64=$(sha256sum artifacts/lag-${{ inputs.version }}-linux-arm64.tar.gz | cut -d' ' -f1)
+
+          mkdir -p homebrew-tap/Formula
+          cat > homebrew-tap/Formula/lag.rb <<FORMULA
+          class Lag < Formula
+            desc "Terminal client for Lag voice chat"
+            homepage "https://trylag.com"
+            version "${{ inputs.version }}"
+            license "MIT"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/lag-app/cli/releases/download/v${{ inputs.version }}/lag-${{ inputs.version }}-darwin-aarch64.tar.gz"
+                sha256 "${SHA_DARWIN_AARCH64}"
+              else
+                url "https://github.com/lag-app/cli/releases/download/v${{ inputs.version }}/lag-${{ inputs.version }}-darwin-x86_64.tar.gz"
+                sha256 "${SHA_DARWIN_X86_64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/lag-app/cli/releases/download/v${{ inputs.version }}/lag-${{ inputs.version }}-linux-arm64.tar.gz"
+                sha256 "${SHA_LINUX_ARM64}"
+              else
+                url "https://github.com/lag-app/cli/releases/download/v${{ inputs.version }}/lag-${{ inputs.version }}-linux-amd64.tar.gz"
+                sha256 "${SHA_LINUX_AMD64}"
+              end
+            end
+
+            def install
+              bin.install "lag"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/lag --version")
+            end
+          end
+          FORMULA
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/lag.rb
+          git commit -m "Update lag to ${{ inputs.version }}"
+          git push
