@@ -22,7 +22,7 @@ pub async fn run(
     output_device: Option<String>,
     with_chat: bool,
 ) -> Result<()> {
-    let creds = auth::require_auth()?;
+    let creds = auth::ensure_auth().await?;
     let mut api = ApiClient::new(creds)?;
 
     // Resolve server and room

@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 // Refresh 5 minutes before expiry to avoid hitting 401
 const REFRESH_BUFFER: Duration = Duration::from_secs(300);
 // Supabase default token lifetime
-const TOKEN_LIFETIME: Duration = Duration::from_secs(3600);
+const TOKEN_LIFETIME: Duration = Duration::from_secs(28800);
 
 pub struct ApiClient {
     client: reqwest::Client,

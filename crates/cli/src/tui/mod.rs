@@ -17,7 +17,7 @@ use ratatui::prelude::*;
 use std::io;
 
 pub async fn run(_server: Option<String>) -> Result<()> {
-    let creds = auth::require_auth()?;
+    let creds = auth::ensure_auth().await?;
 
     // Suggest setup on first run
     let settings_path = crate::config::config_dir().join("audio-settings.json");

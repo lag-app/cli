@@ -10,7 +10,7 @@ use crossterm::terminal;
 use std::io::{self, Write};
 
 pub async fn run(name_or_id: Option<String>) -> Result<()> {
-    let creds = auth::require_auth()?;
+    let creds = auth::ensure_auth().await?;
     let mut api = ApiClient::new(creds)?;
 
     match name_or_id {

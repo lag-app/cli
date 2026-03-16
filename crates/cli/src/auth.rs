@@ -3,6 +3,7 @@
 
 use crate::config::{self, Credentials};
 use anyhow::{anyhow, Result};
+use base64::Engine;
 use rand::Rng;
 use url::Url;
 
@@ -10,8 +11,44 @@ const SUPABASE_URL: &str = "https://base.trylag.com";
 const SUPABASE_ANON_KEY: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVmeXlsZGp5c3pjamtsYW5ucnRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzNjQxNjYsImV4cCI6MjA4Njk0MDE2Nn0.WntE5XNUuzNs5j-OnK0ZMG2sxrfPTSCGi8dgdfWlCrw";
 const WEB_URL: &str = "https://trylag.com";
 
-pub fn require_auth() -> Result<Credentials> {
-    config::load_credentials().ok_or_else(|| anyhow!("Not logged in. Run `lag login` first."))
+pub fn is_token_expired(token: &str) -> bool {
+    let parts: Vec<&str> = token.split('.').collect();
+    if parts.len() != 3 {
+        return true;
+    }
+    let payload = match base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(parts[1]) {
+        Ok(bytes) => bytes,
+        Err(_) => return true,
+    };
+    let json: serde_json::Value = match serde_json::from_slice(&payload) {
+        Ok(v) => v,
+        Err(_) => return true,
+    };
+    let exp = match json.get("exp").and_then(|v| v.as_i64()) {
+        Some(e) => e,
+        None => return true,
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+    now >= exp
+}
+
+pub async fn ensure_auth() -> Result<Credentials> {
+    if let Some(creds) = config::load_credentials() {
+        if !is_token_expired(&creds.access_token) {
+            return Ok(creds);
+        }
+        // Access token expired — try refreshing
+        match refresh_token(&creds.refresh_token).await {
+            Ok(refreshed) => return Ok(refreshed),
+            Err(_) => {
+                let _ = config::clear_credentials();
+            }
+        }
+    }
+    login_flow().await
 }
 
 pub async fn login_flow() -> Result<Credentials> {
