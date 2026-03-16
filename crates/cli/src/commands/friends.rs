@@ -7,7 +7,7 @@ use crate::cli::FriendsAction;
 use anyhow::Result;
 
 pub async fn run(action: Option<FriendsAction>) -> Result<()> {
-    let creds = auth::require_auth()?;
+    let creds = auth::ensure_auth().await?;
     let mut api = ApiClient::new(creds)?;
 
     match action {

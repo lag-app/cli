@@ -11,7 +11,7 @@ use crossterm::terminal;
 use std::io::Write;
 
 pub async fn run(action: Option<DmsAction>) -> Result<()> {
-    let creds = auth::require_auth()?;
+    let creds = auth::ensure_auth().await?;
     let mut api = ApiClient::new(creds)?;
 
     match action {

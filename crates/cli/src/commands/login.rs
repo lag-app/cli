@@ -7,11 +7,23 @@ use crate::config;
 use anyhow::Result;
 
 pub async fn run() -> Result<()> {
-    if config::load_credentials().is_some() {
-        println!("Already logged in. Use `lag logout` first to switch accounts.");
-        return Ok(());
+    if let Some(creds) = config::load_credentials() {
+        if !auth::is_token_expired(&creds.access_token) {
+            println!("Already logged in. Use `lag logout` first to switch accounts.");
+            return Ok(());
+        }
+        // Access token expired — try refreshing
+        match auth::refresh_token(&creds.refresh_token).await {
+            Ok(_) => {
+                println!("Session refreshed. You are logged in.");
+                return Ok(());
+            }
+            Err(_) => {
+                let _ = config::clear_credentials();
+                println!("Session expired. Logging in again...");
+            }
+        }
     }
-
     auth::login_flow().await?;
     Ok(())
 }
@@ -23,7 +35,7 @@ pub async fn logout() -> Result<()> {
 }
 
 pub async fn whoami() -> Result<()> {
-    let creds = auth::require_auth()?;
+    let creds = auth::ensure_auth().await?;
     let mut api = ApiClient::new(creds)?;
 
     let user: serde_json::Value = api.get("/users/me").await?;

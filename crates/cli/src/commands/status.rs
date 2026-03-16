@@ -7,7 +7,7 @@ use crate::ws::{WsClient, WsClientMessage};
 use anyhow::Result;
 
 pub async fn run(status: Option<String>) -> Result<()> {
-    let creds = auth::require_auth()?;
+    let creds = auth::ensure_auth().await?;
 
     match status {
         Some(s) => {
