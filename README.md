@@ -1,6 +1,8 @@
-<p align="left">
-  <img src="https://trylag.com/lag_logo_trimmed_dark_mode.png" alt="Lag Logo" width="200">
-</p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://trylag.com/lag_logo_trimmed_dark_mode.png">
+  <source media="(prefers-color-scheme: light)" srcset="https://trylag.com/lag_logo_trimmed_light_mode.png">
+  <img src="https://trylag.com/lag_logo_trimmed_dark_mode.png" alt="Lag" width="200">
+</picture>
 
 # Lag CLI
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
