@@ -2287,9 +2287,10 @@ dependencies = [
 
 [[package]]
 name = "lag-cli"
-version = "0.0.7-alpha"
+version = "0.0.9-beta"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "clap 4.6.0",
  "cocoa 0.26.1",
@@ -2317,7 +2318,7 @@ dependencies = [
 
 [[package]]
 name = "lag-common"
-version = "0.0.7-alpha"
+version = "0.0.9-beta"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2329,7 +2330,7 @@ dependencies = [
 
 [[package]]
 name = "lag-voice-core"
-version = "0.0.7-alpha"
+version = "0.0.9-beta"
 dependencies = [
  "anyhow",
  "audiopus",

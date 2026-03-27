@@ -10,7 +10,7 @@ members = [
 opt-level = 1
 
 [workspace.package]
-version = "0.0.8-alpha"
+version = "0.0.9-beta"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/lag-app/cli"

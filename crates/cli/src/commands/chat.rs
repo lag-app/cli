@@ -51,8 +51,8 @@ async fn send_message(
 async fn open_chat(api: &mut ApiClient, server_query: &str, room_query: &str) -> Result<()> {
     let (server_id, room_id) = resolve_server_room(api, server_query, room_query).await?;
 
-    let messages: Vec<serde_json::Value> = api
-        .get(&format!(
+    let messages = api
+        .get_messages(&format!(
             "/servers/{}/rooms/{}/messages?limit=50",
             server_id, room_id
         ))
@@ -66,9 +66,8 @@ async fn open_chat(api: &mut ApiClient, server_query: &str, room_query: &str) ->
     }
 
     let mut ws = WsClient::connect(api.base_url(), api.access_token()).await?;
-    ws.send(WsClientMessage::SubscribeServerRoom {
-        server_id: server_id.clone(),
-        room_id: Some(room_id.clone()),
+    ws.send(WsClientMessage::SubscribeServers {
+        server_ids: vec![server_id.clone()],
     })?;
 
     terminal::enable_raw_mode()?;
@@ -82,10 +81,15 @@ async fn open_chat(api: &mut ApiClient, server_query: &str, room_query: &str) ->
             ws_msg = ws.recv() => {
                 match ws_msg {
                     Some(WsServerMessage::RoomMessage(val)) => {
-                        let msg_room_id = val["roomId"].as_str().unwrap_or("");
+                        let msg = if val.get("message").is_some() {
+                            val["message"].clone()
+                        } else {
+                            val
+                        };
+                        let msg_room_id = msg["roomId"].as_str().unwrap_or("");
                         if msg_room_id == room_id {
                             clear_line();
-                            print_message(&val);
+                            print_message(&msg);
                             print_prompt(&input_buf);
                         }
                     }
@@ -93,7 +97,7 @@ async fn open_chat(api: &mut ApiClient, server_query: &str, room_query: &str) ->
                     _ => {}
                 }
             }
-            _ = async {
+            should_quit = async {
                 if event::poll(std::time::Duration::from_millis(50)).unwrap_or(false) {
                     if let Ok(Event::Key(key)) = event::read() {
                         match (key.code, key.modifiers) {
@@ -127,7 +131,9 @@ async fn open_chat(api: &mut ApiClient, server_query: &str, room_query: &str) ->
                     }
                 }
                 false
-            } => {}
+            } => {
+                if should_quit { break; }
+            }
         }
     }
 

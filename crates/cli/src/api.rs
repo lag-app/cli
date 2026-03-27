@@ -161,6 +161,23 @@ impl ApiClient {
     pub fn base_url(&self) -> &str {
         &self.base_url
     }
+
+    /// Fetch a messages endpoint that returns `{"messages": [...]}` or a bare array.
+    pub async fn get_messages(&mut self, path: &str) -> Result<Vec<serde_json::Value>> {
+        let val: serde_json::Value = self.get(path).await?;
+        Ok(extract_messages(val))
+    }
+}
+
+/// Extract messages from either `{"messages": [...]}` or a bare `[...]`.
+pub fn extract_messages(val: serde_json::Value) -> Vec<serde_json::Value> {
+    if let Some(arr) = val.as_array() {
+        arr.clone()
+    } else if let Some(arr) = val["messages"].as_array() {
+        arr.clone()
+    } else {
+        Vec::new()
+    }
 }
 
 async fn parse_response<T: DeserializeOwned>(resp: reqwest::Response) -> Result<T> {

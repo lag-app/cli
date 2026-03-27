@@ -13,6 +13,7 @@ use parking_lot::Mutex;
 use std::io::Write;
 use std::sync::Arc;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run(
     server: String,
     room: String,
@@ -21,6 +22,7 @@ pub async fn run(
     input_device: Option<String>,
     output_device: Option<String>,
     with_chat: bool,
+    region: Option<String>,
 ) -> Result<()> {
     let creds = auth::ensure_auth().await?;
     let mut api = ApiClient::new(creds)?;
@@ -30,11 +32,12 @@ pub async fn run(
         resolve_voice_room(&mut api, &server, &room).await?;
 
     // Get voice token
+    let body = match region {
+        Some(ref r) => serde_json::json!({ "region": r }),
+        None => serde_json::json!({}),
+    };
     let token_resp: serde_json::Value = api
-        .post(
-            &format!("/voice/rooms/{}/token", room_id),
-            &serde_json::json!({}),
-        )
+        .post(&format!("/voice/rooms/{}/token", room_id), &body)
         .await?;
 
     let voice_url = token_resp["voiceUrl"]
@@ -115,9 +118,8 @@ pub async fn run(
     // Optionally connect WS for chat
     let mut ws = if with_chat {
         let ws = WsClient::connect(api.base_url(), api.access_token()).await?;
-        ws.send(crate::ws::WsClientMessage::SubscribeServerRoom {
-            server_id: server_id.clone(),
-            room_id: Some(room_id.clone()),
+        ws.send(crate::ws::WsClientMessage::SubscribeServers {
+            server_ids: vec![server_id.clone()],
         })?;
         Some(ws)
     } else {
@@ -126,8 +128,8 @@ pub async fn run(
 
     if with_chat {
         // Load recent messages
-        let messages: Vec<serde_json::Value> = api
-            .get(&format!(
+        let messages = api
+            .get_messages(&format!(
                 "/servers/{}/rooms/{}/messages?limit=20",
                 server_id, room_id
             ))
@@ -196,8 +198,13 @@ pub async fn run(
                     }
                 } => {
                     if let Some(WsServerMessage::RoomMessage(val)) = ws_msg {
-                        let username = val["username"].as_str().unwrap_or("?");
-                        let content = val["content"].as_str().unwrap_or("");
+                        let msg = if val.get("message").is_some() {
+                            val["message"].clone()
+                        } else {
+                            val
+                        };
+                        let username = msg["username"].as_str().unwrap_or("?");
+                        let content = msg["content"].as_str().unwrap_or("");
                         println!("\r[chat] {}: {}\x1b[K", username, content);
                         if with_chat {
                             print!("> {}", input_buf);

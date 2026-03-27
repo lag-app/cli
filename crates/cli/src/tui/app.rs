@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Lag
 // SPDX-License-Identifier: MIT
 
-use crate::api::ApiClient;
+use crate::api::{extract_messages, ApiClient};
 use crate::config::{self, Credentials};
 use crate::ws::{WsClient, WsServerMessage};
 use anyhow::Result;
@@ -339,6 +339,20 @@ impl App {
                         )
                         .await
                         .ok();
+
+                        // Subscribe to all user's servers
+                        if let Some(ref ws) = self.ws {
+                            let server_ids: Vec<String> = self
+                                .servers
+                                .iter()
+                                .filter_map(|s| s["id"].as_str().map(String::from))
+                                .collect();
+                            if !server_ids.is_empty() {
+                                let _ = ws.send(crate::ws::WsClientMessage::SubscribeServers {
+                                    server_ids,
+                                });
+                            }
+                        }
 
                         self.loading = None;
                         self.init_rx = None;
@@ -834,9 +848,8 @@ impl App {
                     self.selected_room_id = Some(room_id.clone());
                     self.selected_room_name = Some(room_name);
                     if let Some(ref ws) = self.ws {
-                        let _ = ws.send(crate::ws::WsClientMessage::SubscribeServerRoom {
-                            server_id,
-                            room_id: Some(room_id),
+                        let _ = ws.send(crate::ws::WsClientMessage::SubscribeServers {
+                            server_ids: vec![server_id],
                         });
                     }
                 }
@@ -1115,9 +1128,9 @@ impl App {
                 match result {
                     Ok(conv) => {
                         let conv_id = conv["id"].as_str().unwrap_or("").to_string();
-                        let msgs: Vec<serde_json::Value> = self
+                        let msgs = self
                             .api
-                            .get(&format!("/dms/{}/messages", conv_id))
+                            .get_messages(&format!("/dms/{}/messages", conv_id))
                             .await
                             .unwrap_or_default();
                         self.loading = None;
@@ -1315,7 +1328,7 @@ impl App {
 
                             tokio::spawn(async move {
                                 let client = reqwest::Client::new();
-                                let msgs: Vec<serde_json::Value> = match client
+                                let msgs = match client
                                     .get(format!(
                                         "{}/servers/{}/rooms/{}/messages?limit=50",
                                         base_url, sid, rid
@@ -1325,7 +1338,9 @@ impl App {
                                     .await
                                 {
                                     Ok(resp) if resp.status().is_success() => {
-                                        resp.json().await.unwrap_or_default()
+                                        let val: serde_json::Value =
+                                            resp.json().await.unwrap_or_default();
+                                        extract_messages(val)
                                     }
                                     _ => Vec::new(),
                                 };
@@ -1386,14 +1401,15 @@ impl App {
 
                     tokio::spawn(async move {
                         let client = reqwest::Client::new();
-                        let msgs: Vec<serde_json::Value> = match client
+                        let msgs = match client
                             .get(format!("{}/dms/{}/messages", base_url, dm_id))
                             .header("Authorization", format!("Bearer {}", token))
                             .send()
                             .await
                         {
                             Ok(resp) if resp.status().is_success() => {
-                                resp.json().await.unwrap_or_default()
+                                let val: serde_json::Value = resp.json().await.unwrap_or_default();
+                                extract_messages(val)
                             }
                             _ => Vec::new(),
                         };
@@ -1515,31 +1531,29 @@ impl App {
                 }
             }
             WsServerMessage::RoomMessage(val) => {
+                let msg = if val.get("message").is_some() {
+                    val["message"].clone()
+                } else {
+                    val
+                };
                 if let Some(ref room_id) = self.selected_room_id {
-                    let msg_room_id = val["roomId"]
+                    let msg_room_id = msg["roomId"]
                         .as_str()
-                        .or_else(|| val["room_id"].as_str())
+                        .or_else(|| msg["room_id"].as_str())
                         .unwrap_or("");
                     if msg_room_id == room_id {
-                        self.messages.push(val);
+                        self.messages.push(msg);
                     }
                 }
             }
-            WsServerMessage::ServerEvent { event, payload } => {
-                if event.as_str() == "room_message" {
-                    if let Some(ref room_id) = self.selected_room_id {
-                        let msg_room_id = payload["room_id"]
-                            .as_str()
-                            .or_else(|| payload["roomId"].as_str())
-                            .unwrap_or("");
-                        if msg_room_id == room_id {
-                            self.messages.push(payload);
-                        }
-                    }
-                }
+            WsServerMessage::ServerEvent { ref event, .. } => {
+                tracing::debug!("Unhandled server_event: {}", event);
             }
             WsServerMessage::FriendRequestReceived(_)
-            | WsServerMessage::FriendRequestAccepted(_) => {
+            | WsServerMessage::FriendRequestAccepted(_)
+            | WsServerMessage::FriendRequestDeclined(_)
+            | WsServerMessage::FriendRequestWithdrawn(_)
+            | WsServerMessage::FriendRemoved(_) => {
                 self.pending_friend_reload = true;
             }
             WsServerMessage::FriendOnline(val) => {
@@ -1566,6 +1580,120 @@ impl App {
                         entry.status = new_status.to_string();
                     }
                 }
+            }
+            WsServerMessage::RoomMessageEdited(val) => {
+                let msg_id = val["messageId"]
+                    .as_str()
+                    .or_else(|| val["id"].as_str())
+                    .unwrap_or("");
+                if !msg_id.is_empty() {
+                    if let Some(existing) = self
+                        .messages
+                        .iter_mut()
+                        .find(|m| m["id"].as_str() == Some(msg_id))
+                    {
+                        if let Some(content) = val["content"].as_str() {
+                            existing["content"] = serde_json::Value::String(content.to_string());
+                        }
+                    }
+                }
+            }
+            WsServerMessage::RoomMessageDeleted(val) => {
+                let msg_id = val["messageId"]
+                    .as_str()
+                    .or_else(|| val["id"].as_str())
+                    .unwrap_or("");
+                if !msg_id.is_empty() {
+                    self.messages.retain(|m| m["id"].as_str() != Some(msg_id));
+                }
+            }
+            WsServerMessage::DmMessageEdited(val) => {
+                let msg_id = val["messageId"]
+                    .as_str()
+                    .or_else(|| val["id"].as_str())
+                    .unwrap_or("");
+                if !msg_id.is_empty() {
+                    if let Some(existing) = self
+                        .messages
+                        .iter_mut()
+                        .find(|m| m["id"].as_str() == Some(msg_id))
+                    {
+                        if let Some(content) = val["content"].as_str() {
+                            existing["content"] = serde_json::Value::String(content.to_string());
+                        }
+                    }
+                }
+            }
+            WsServerMessage::DmMessageDeleted(val) => {
+                let msg_id = val["messageId"]
+                    .as_str()
+                    .or_else(|| val["id"].as_str())
+                    .unwrap_or("");
+                if !msg_id.is_empty() {
+                    self.messages.retain(|m| m["id"].as_str() != Some(msg_id));
+                }
+            }
+            WsServerMessage::ServerRoomCreated(_) | WsServerMessage::ServerRoomDeleted(_) => {
+                // Trigger a refresh of the server detail if we're viewing it
+                if let Some(ref detail) = self.selected_server {
+                    let server_id = detail.id.clone();
+                    let base_url = self.api.base_url().to_string();
+                    let token = self.api.access_token().to_string();
+                    let (tx, rx) = tokio::sync::oneshot::channel();
+                    tokio::spawn(async move {
+                        let client = reqwest::Client::new();
+                        let resp = client
+                            .get(format!("{}/servers/{}", base_url, server_id))
+                            .header("Authorization", format!("Bearer {}", token))
+                            .send()
+                            .await;
+                        let result = match resp {
+                            Ok(r) => match r.json::<serde_json::Value>().await {
+                                Ok(val) => {
+                                    let name = val["name"].as_str().unwrap_or("?").to_string();
+                                    let rooms =
+                                        val["rooms"].as_array().cloned().unwrap_or_default();
+                                    ContentLoadResult::ServerDetail {
+                                        id: server_id,
+                                        name,
+                                        rooms,
+                                    }
+                                }
+                                Err(e) => ContentLoadResult::Error(e.to_string()),
+                            },
+                            Err(e) => ContentLoadResult::Error(e.to_string()),
+                        };
+                        let _ = tx.send(result);
+                    });
+                    self.content_load_rx = Some(rx);
+                }
+            }
+            WsServerMessage::UnreadCounts(val) => {
+                if let Some(counts) = val["counts"].as_array().or_else(|| val["dms"].as_array()) {
+                    for entry in counts {
+                        if let (Some(id), Some(count)) = (
+                            entry["conversationId"]
+                                .as_str()
+                                .or_else(|| entry["id"].as_str()),
+                            entry["count"].as_u64(),
+                        ) {
+                            if count > 0 {
+                                self.dm_unread.insert(id.to_string(), count as u32);
+                            } else {
+                                self.dm_unread.remove(id);
+                            }
+                        }
+                    }
+                }
+            }
+            WsServerMessage::VoiceRoomUserSpeaking(_)
+            | WsServerMessage::ServerMemberStatuses(_)
+            | WsServerMessage::ServerInviteReceived(_)
+            | WsServerMessage::ServerSnapshot(_)
+            | WsServerMessage::UserStatusChanged(_)
+            | WsServerMessage::UserGameActivity(_)
+            | WsServerMessage::RoomTyping(_) => {
+                tracing::debug!("WS message (no-op): {:?}", msg);
             }
             _ => {}
         }

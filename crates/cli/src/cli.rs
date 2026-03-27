@@ -64,6 +64,9 @@ pub enum Commands {
         /// Show room text chat alongside voice
         #[arg(long)]
         with_chat: bool,
+        /// Voice server region (e.g. eu, us)
+        #[arg(long)]
+        region: Option<String>,
     },
 
     /// Audio device configuration
@@ -176,6 +179,7 @@ impl Cli {
                 input_device,
                 output_device,
                 with_chat,
+                region,
             }) => {
                 crate::commands::join::run(
                     server,
@@ -185,6 +189,7 @@ impl Cli {
                     input_device,
                     output_device,
                     with_chat,
+                    region,
                 )
                 .await
             }
@@ -247,6 +252,7 @@ mod tests {
                 input_device,
                 output_device,
                 with_chat,
+                region,
             }) => {
                 assert_eq!(server, "my-server");
                 assert_eq!(room, "general");
@@ -255,6 +261,7 @@ mod tests {
                 assert_eq!(input_device.as_deref(), Some("Blue Yeti"));
                 assert_eq!(output_device.as_deref(), Some("Speakers"));
                 assert!(with_chat);
+                assert!(region.is_none());
             }
             _ => panic!("expected Join"),
         }
