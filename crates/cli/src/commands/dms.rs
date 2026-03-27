@@ -70,8 +70,8 @@ async fn open_dm(api: &mut ApiClient, username: &str) -> Result<()> {
     let conv_id = conv["id"].as_str().unwrap().to_string();
 
     // Load recent messages
-    let messages: Vec<serde_json::Value> = api
-        .get(&format!("/dms/{}/messages?limit=50", conv_id))
+    let messages = api
+        .get_messages(&format!("/dms/{}/messages?limit=50", conv_id))
         .await?;
 
     println!("-- DM with {} --", username);

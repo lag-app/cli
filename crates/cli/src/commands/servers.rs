@@ -121,6 +121,7 @@ async fn interactive_room_picker_inner(
                 None,
                 None,
                 false,
+                None,
             )
             .await
         }
@@ -133,6 +134,7 @@ async fn interactive_room_picker_inner(
                 None,
                 None,
                 true,
+                None,
             )
             .await
         }

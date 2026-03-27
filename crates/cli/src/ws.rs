@@ -28,19 +28,10 @@ pub enum WsClientMessage {
         #[serde(rename = "userIds")]
         user_ids: Vec<String>,
     },
-    #[serde(rename = "subscribe_server_room")]
-    SubscribeServerRoom {
-        #[serde(rename = "serverId")]
-        server_id: String,
-        #[serde(rename = "roomId")]
-        room_id: Option<String>,
-    },
-    #[serde(rename = "unsubscribe_server_room")]
-    UnsubscribeServerRoom {
-        #[serde(rename = "serverId")]
-        server_id: String,
-        #[serde(rename = "roomId")]
-        room_id: Option<String>,
+    #[serde(rename = "subscribe_servers")]
+    SubscribeServers {
+        #[serde(rename = "serverIds")]
+        server_ids: Vec<String>,
     },
     #[serde(rename = "typing_start")]
     TypingStart {
@@ -66,6 +57,23 @@ pub enum WsClientMessage {
         #[serde(rename = "roomId")]
         room_id: String,
     },
+    #[serde(rename = "set_game_activity")]
+    SetGameActivity {
+        #[serde(rename = "gameName")]
+        game_name: Option<String>,
+    },
+    #[serde(rename = "mark_room_read")]
+    MarkRoomRead {
+        #[serde(rename = "roomId")]
+        room_id: String,
+        timestamp: String,
+    },
+    #[serde(rename = "mark_dm_read")]
+    MarkDmRead {
+        #[serde(rename = "conversationId")]
+        conversation_id: String,
+        timestamp: String,
+    },
 }
 
 /// Raw WS message — manually parsed since serde internally-tagged enums
@@ -89,6 +97,23 @@ pub enum WsServerMessage {
     VoiceRoomUserLeft(serde_json::Value),
     ServerMemberJoined(serde_json::Value),
     ServerMemberLeft(serde_json::Value),
+    FriendRequestDeclined(serde_json::Value),
+    FriendRequestWithdrawn(serde_json::Value),
+    FriendRemoved(serde_json::Value),
+    VoiceRoomUserSpeaking(serde_json::Value),
+    ServerRoomCreated(serde_json::Value),
+    ServerRoomDeleted(serde_json::Value),
+    UserStatusChanged(serde_json::Value),
+    ServerMemberStatuses(serde_json::Value),
+    ServerInviteReceived(serde_json::Value),
+    ServerSnapshot(serde_json::Value),
+    RoomMessageEdited(serde_json::Value),
+    RoomMessageDeleted(serde_json::Value),
+    RoomTyping(serde_json::Value),
+    DmMessageEdited(serde_json::Value),
+    DmMessageDeleted(serde_json::Value),
+    UnreadCounts(serde_json::Value),
+    UserGameActivity(serde_json::Value),
     ServerEvent {
         event: String,
         payload: serde_json::Value,
@@ -117,6 +142,23 @@ impl WsServerMessage {
             "voice_room_user_left" => Self::VoiceRoomUserLeft(val),
             "server_member_joined" => Self::ServerMemberJoined(val),
             "server_member_left" => Self::ServerMemberLeft(val),
+            "friend_request_declined" => Self::FriendRequestDeclined(val),
+            "friend_request_withdrawn" => Self::FriendRequestWithdrawn(val),
+            "friend_removed" => Self::FriendRemoved(val),
+            "voice_room_user_speaking" => Self::VoiceRoomUserSpeaking(val),
+            "server_room_created" => Self::ServerRoomCreated(val),
+            "server_room_deleted" => Self::ServerRoomDeleted(val),
+            "user_status_changed" => Self::UserStatusChanged(val),
+            "server_member_statuses" => Self::ServerMemberStatuses(val),
+            "server_invite_received" => Self::ServerInviteReceived(val),
+            "server_snapshot" => Self::ServerSnapshot(val),
+            "room_message_edited" => Self::RoomMessageEdited(val),
+            "room_message_deleted" => Self::RoomMessageDeleted(val),
+            "room_typing" => Self::RoomTyping(val),
+            "dm_message_edited" => Self::DmMessageEdited(val),
+            "dm_message_deleted" => Self::DmMessageDeleted(val),
+            "unread_counts" => Self::UnreadCounts(val),
+            "user_game_activity" => Self::UserGameActivity(val),
             "server_event" => Self::ServerEvent {
                 event: val["event"].as_str().unwrap_or("").to_string(),
                 payload: val["payload"].clone(),
@@ -182,6 +224,14 @@ impl WsClient {
             while let Some(result) = read.next().await {
                 match result {
                     Ok(Message::Text(text)) => {
+                        if let Ok(mut f) = std::fs::OpenOptions::new()
+                            .create(true)
+                            .append(true)
+                            .open("/tmp/lag-ws-raw.log")
+                        {
+                            use std::io::Write;
+                            let _ = writeln!(f, "{}", text);
+                        }
                         if let Some(parsed) = WsServerMessage::parse(&text) {
                             let _ = recv_tx.send(parsed);
                         } else {
@@ -448,5 +498,159 @@ mod tests {
     fn client_message_ping_serializes() {
         let json = serde_json::to_string(&WsClientMessage::Ping).unwrap();
         assert!(json.contains(r#""type":"ping""#));
+    }
+
+    #[test]
+    fn client_message_subscribe_servers_serializes() {
+        let msg = WsClientMessage::SubscribeServers {
+            server_ids: vec!["s1".into(), "s2".into()],
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""type":"subscribe_servers""#));
+        assert!(json.contains(r#""serverIds""#));
+        assert!(json.contains(r#""s1""#));
+        assert!(json.contains(r#""s2""#));
+    }
+
+    #[test]
+    fn client_message_set_game_activity_serializes() {
+        let msg = WsClientMessage::SetGameActivity {
+            game_name: Some("Chess".into()),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""type":"set_game_activity""#));
+        assert!(json.contains(r#""gameName":"Chess""#));
+    }
+
+    #[test]
+    fn client_message_mark_room_read_serializes() {
+        let msg = WsClientMessage::MarkRoomRead {
+            room_id: "r1".into(),
+            timestamp: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""type":"mark_room_read""#));
+        assert!(json.contains(r#""roomId":"r1""#));
+    }
+
+    #[test]
+    fn client_message_mark_dm_read_serializes() {
+        let msg = WsClientMessage::MarkDmRead {
+            conversation_id: "c1".into(),
+            timestamp: "2026-01-01T00:00:00Z".into(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""type":"mark_dm_read""#));
+        assert!(json.contains(r#""conversationId":"c1""#));
+    }
+
+    #[test]
+    fn parse_friend_request_declined() {
+        let msg =
+            WsServerMessage::parse(r#"{"type":"friend_request_declined","userId":"u1"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::FriendRequestDeclined(_)));
+    }
+
+    #[test]
+    fn parse_friend_request_withdrawn() {
+        let msg =
+            WsServerMessage::parse(r#"{"type":"friend_request_withdrawn","userId":"u1"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::FriendRequestWithdrawn(_)));
+    }
+
+    #[test]
+    fn parse_friend_removed() {
+        let msg = WsServerMessage::parse(r#"{"type":"friend_removed","userId":"u1"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::FriendRemoved(_)));
+    }
+
+    #[test]
+    fn parse_room_message_edited() {
+        let msg = WsServerMessage::parse(
+            r#"{"type":"room_message_edited","messageId":"m1","content":"updated"}"#,
+        )
+        .unwrap();
+        assert!(matches!(msg, WsServerMessage::RoomMessageEdited(_)));
+    }
+
+    #[test]
+    fn parse_room_message_deleted() {
+        let msg =
+            WsServerMessage::parse(r#"{"type":"room_message_deleted","messageId":"m1"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::RoomMessageDeleted(_)));
+    }
+
+    #[test]
+    fn parse_dm_message_edited() {
+        let msg = WsServerMessage::parse(
+            r#"{"type":"dm_message_edited","messageId":"m1","content":"updated"}"#,
+        )
+        .unwrap();
+        assert!(matches!(msg, WsServerMessage::DmMessageEdited(_)));
+    }
+
+    #[test]
+    fn parse_dm_message_deleted() {
+        let msg =
+            WsServerMessage::parse(r#"{"type":"dm_message_deleted","messageId":"m1"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::DmMessageDeleted(_)));
+    }
+
+    #[test]
+    fn parse_server_room_created() {
+        let msg = WsServerMessage::parse(
+            r#"{"type":"server_room_created","roomId":"r1","name":"general"}"#,
+        )
+        .unwrap();
+        assert!(matches!(msg, WsServerMessage::ServerRoomCreated(_)));
+    }
+
+    #[test]
+    fn parse_server_room_deleted() {
+        let msg =
+            WsServerMessage::parse(r#"{"type":"server_room_deleted","roomId":"r1"}"#).unwrap();
+        assert!(matches!(msg, WsServerMessage::ServerRoomDeleted(_)));
+    }
+
+    #[test]
+    fn parse_unread_counts() {
+        let msg =
+            WsServerMessage::parse(r#"{"type":"unread_counts","counts":[{"id":"c1","count":3}]}"#)
+                .unwrap();
+        assert!(matches!(msg, WsServerMessage::UnreadCounts(_)));
+    }
+
+    #[test]
+    fn parse_user_status_changed() {
+        let msg = WsServerMessage::parse(
+            r#"{"type":"user_status_changed","userId":"u1","status":"away"}"#,
+        )
+        .unwrap();
+        assert!(matches!(msg, WsServerMessage::UserStatusChanged(_)));
+    }
+
+    #[test]
+    fn parse_voice_room_user_speaking() {
+        let msg = WsServerMessage::parse(
+            r#"{"type":"voice_room_user_speaking","userId":"u1","speaking":true}"#,
+        )
+        .unwrap();
+        assert!(matches!(msg, WsServerMessage::VoiceRoomUserSpeaking(_)));
+    }
+
+    #[test]
+    fn parse_room_typing() {
+        let msg = WsServerMessage::parse(r#"{"type":"room_typing","userId":"u1","roomId":"r1"}"#)
+            .unwrap();
+        assert!(matches!(msg, WsServerMessage::RoomTyping(_)));
+    }
+
+    #[test]
+    fn parse_user_game_activity() {
+        let msg = WsServerMessage::parse(
+            r#"{"type":"user_game_activity","userId":"u1","gameName":"Chess"}"#,
+        )
+        .unwrap();
+        assert!(matches!(msg, WsServerMessage::UserGameActivity(_)));
     }
 }
