@@ -1571,8 +1571,7 @@ impl App {
                     .or_else(|| msg["room_id"].as_str())
                     .unwrap_or("");
                 let is_active_room = self.selected_room_id.as_deref() == Some(msg_room_id);
-                let is_from_me =
-                    msg["username"].as_str() == Some(self.username.as_str());
+                let is_from_me = msg["username"].as_str() == Some(self.username.as_str());
 
                 if is_active_room {
                     self.messages.push(msg.clone());
@@ -1589,10 +1588,7 @@ impl App {
                         .unwrap_or("a room");
                     let content = msg["content"].as_str().unwrap_or("");
                     let preview: String = content.chars().take(100).collect();
-                    self.send_notification(
-                        &format!("{} in #{}", sender, room_name),
-                        &preview,
-                    );
+                    self.send_notification(&format!("{} in #{}", sender, room_name), &preview);
                 }
             }
             WsServerMessage::ServerEvent { ref event, .. } => {
