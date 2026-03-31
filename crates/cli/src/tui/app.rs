@@ -183,6 +183,7 @@ pub struct App {
     pub init_rx: Option<tokio::sync::mpsc::UnboundedReceiver<InitUpdate>>,
     pub loading: Option<String>,
     pub error_message: Option<String>,
+    pub notifications_enabled: bool,
 }
 
 impl App {
@@ -236,6 +237,7 @@ impl App {
             init_rx: None,
             loading: Some("Connecting to Lag...".into()),
             error_message: None,
+            notifications_enabled: config::load_config().notifications_enabled,
         })
     }
 
@@ -1495,6 +1497,25 @@ impl App {
         });
     }
 
+    fn send_notification(&self, title: &str, body: &str) {
+        if !self.notifications_enabled {
+            return;
+        }
+        let title = title.to_string();
+        let body = body.to_string();
+        tokio::task::spawn_blocking(move || {
+            if let Err(e) = notify_rust::Notification::new()
+                .summary(&title)
+                .body(&body)
+                .icon("dialog-information")
+                .timeout(5000)
+                .show()
+            {
+                tracing::warn!("Failed to send notification: {}", e);
+            }
+        });
+    }
+
     fn handle_ws_message(&mut self, msg: WsServerMessage) {
         match msg {
             WsServerMessage::DmMessage(val) => {
@@ -1520,6 +1541,15 @@ impl App {
                 // Track unread for inactive conversations (only for messages from others)
                 if !is_active && !is_from_me {
                     *self.dm_unread.entry(msg_conv_id.clone()).or_insert(0) += 1;
+
+                    let sender = dm_msg["displayName"]
+                        .as_str()
+                        .or_else(|| dm_msg["display_name"].as_str())
+                        .or_else(|| dm_msg["username"].as_str())
+                        .unwrap_or("Someone");
+                    let content = dm_msg["content"].as_str().unwrap_or("");
+                    let preview: String = content.chars().take(100).collect();
+                    self.send_notification(&format!("DM from {}", sender), &preview);
                 }
 
                 // Update lastMessage in the DM list for sidebar preview
@@ -1536,14 +1566,33 @@ impl App {
                 } else {
                     val
                 };
-                if let Some(ref room_id) = self.selected_room_id {
-                    let msg_room_id = msg["roomId"]
+                let msg_room_id = msg["roomId"]
+                    .as_str()
+                    .or_else(|| msg["room_id"].as_str())
+                    .unwrap_or("");
+                let is_active_room = self.selected_room_id.as_deref() == Some(msg_room_id);
+                let is_from_me =
+                    msg["username"].as_str() == Some(self.username.as_str());
+
+                if is_active_room {
+                    self.messages.push(msg.clone());
+                }
+
+                if !is_active_room && !is_from_me {
+                    let sender = msg["displayName"]
                         .as_str()
-                        .or_else(|| msg["room_id"].as_str())
-                        .unwrap_or("");
-                    if msg_room_id == room_id {
-                        self.messages.push(msg);
-                    }
+                        .or_else(|| msg["username"].as_str())
+                        .unwrap_or("Someone");
+                    let room_name = msg["roomName"]
+                        .as_str()
+                        .or_else(|| msg["room_name"].as_str())
+                        .unwrap_or("a room");
+                    let content = msg["content"].as_str().unwrap_or("");
+                    let preview: String = content.chars().take(100).collect();
+                    self.send_notification(
+                        &format!("{} in #{}", sender, room_name),
+                        &preview,
+                    );
                 }
             }
             WsServerMessage::ServerEvent { ref event, .. } => {

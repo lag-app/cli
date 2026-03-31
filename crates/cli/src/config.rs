@@ -15,6 +15,12 @@ pub struct CliConfig {
     pub api_url: Option<String>,
     pub ptt_key: Option<String>,
     pub vad_threshold: f32,
+    #[serde(default = "default_true")]
+    pub notifications_enabled: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for CliConfig {
@@ -23,6 +29,7 @@ impl Default for CliConfig {
             api_url: None,
             ptt_key: None,
             vad_threshold: 0.01,
+            notifications_enabled: true,
         }
     }
 }
@@ -130,6 +137,7 @@ mod tests {
             api_url: Some("https://example.com".to_string()),
             ptt_key: Some("KeyV".to_string()),
             vad_threshold: 0.05,
+            notifications_enabled: true,
         };
         let json = serde_json::to_string(&config).unwrap();
         let restored: CliConfig = serde_json::from_str(&json).unwrap();
