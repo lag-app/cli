@@ -33,6 +33,7 @@ anyhow = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 parking_lot = "0.12"
+notify-rust = "4"
 futures-util = "0.3"
 rand = "0.8"
 base64 = "0.22"
