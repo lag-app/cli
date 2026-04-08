@@ -82,7 +82,10 @@ pub async fn login_flow() -> Result<Credentials> {
     let creds = match exchange_for_pat(&supabase_creds.access_token).await {
         Ok(pat_creds) => pat_creds,
         Err(e) => {
-            eprintln!("Warning: Could not create long-lived token ({}). Using session token.", e);
+            eprintln!(
+                "Warning: Could not create long-lived token ({}). Using session token.",
+                e
+            );
             supabase_creds
         }
     };
