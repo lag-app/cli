@@ -37,12 +37,23 @@ pub fn is_token_expired(token: &str) -> bool {
 
 pub async fn ensure_auth() -> Result<Credentials> {
     if let Some(creds) = config::load_credentials() {
+        // PAT-based auth - no expiry to check
+        if creds.pat.is_some() {
+            return Ok(creds);
+        }
+        // Legacy JWT-based auth
         if !is_token_expired(&creds.access_token) {
             return Ok(creds);
         }
-        // Access token expired — try refreshing
+        // Access token expired - try refreshing then exchanging for PAT
         match refresh_token(&creds.refresh_token).await {
-            Ok(refreshed) => return Ok(refreshed),
+            Ok(refreshed) => {
+                // Try to upgrade to PAT
+                match exchange_for_pat(&refreshed.access_token).await {
+                    Ok(pat_creds) => return Ok(pat_creds),
+                    Err(_) => return Ok(refreshed),
+                }
+            }
             Err(_) => {
                 let _ = config::clear_credentials();
             }
@@ -65,11 +76,51 @@ pub async fn login_flow() -> Result<Credentials> {
     }
 
     println!("Waiting for authentication...");
-    let creds = wait_for_callback(server, &state)?;
+    let supabase_creds = wait_for_callback(server, &state)?;
+
+    // Exchange Supabase tokens for a long-lived PAT
+    let creds = match exchange_for_pat(&supabase_creds.access_token).await {
+        Ok(pat_creds) => pat_creds,
+        Err(e) => {
+            eprintln!("Warning: Could not create long-lived token ({}). Using session token.", e);
+            supabase_creds
+        }
+    };
 
     config::save_credentials(&creds)?;
     println!("Logged in successfully.");
     Ok(creds)
+}
+
+/// Exchange a short-lived Supabase JWT for a long-lived Personal Access Token.
+async fn exchange_for_pat(access_token: &str) -> Result<Credentials> {
+    let cfg = config::load_config();
+    let api_url = cfg.effective_api_url();
+    let client = reqwest::Client::new();
+
+    let resp = client
+        .post(format!("{}/tokens/cli", api_url))
+        .header("Authorization", format!("Bearer {}", access_token))
+        .send()
+        .await?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(anyhow!("PAT creation failed ({}): {}", status, body));
+    }
+
+    let body: serde_json::Value = resp.json().await?;
+    let pat = body["token"]
+        .as_str()
+        .ok_or_else(|| anyhow!("No token in response"))?
+        .to_string();
+
+    Ok(Credentials {
+        access_token: String::new(),
+        refresh_token: String::new(),
+        pat: Some(pat),
+    })
 }
 
 fn generate_state() -> String {
@@ -140,6 +191,7 @@ fn wait_for_callback(server: tiny_http::Server, expected_state: &str) -> Result<
             return Ok(Credentials {
                 access_token: access_token.clone(),
                 refresh_token: refresh_token.clone(),
+                pat: None,
             });
         }
 
@@ -190,6 +242,7 @@ pub async fn refresh_token(refresh_token: &str) -> Result<Credentials> {
     let creds = Credentials {
         access_token,
         refresh_token: new_refresh,
+        pat: None,
     };
     config::save_credentials(&creds)?;
     Ok(creds)

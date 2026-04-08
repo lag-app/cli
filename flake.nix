@@ -42,6 +42,7 @@
           clippy
           rustc
           rustfmt
+          rust-analyzer
         ];
 
         linuxNativeBuildInputs = with pkgs; [
@@ -107,12 +108,19 @@
 
         devShells.default = pkgs.mkShell {
           inputsFrom = [ package ];
-          packages = nativeBuildInputs;
+          packages = nativeBuildInputs ++ [
+            pkgs.git
+          ];
 
           LK_CUSTOM_WEBRTC = webrtcPrebuilt;
 
           shellHook = ''
             export RUST_SRC_PATH="${pkgs.rustPlatform.rustLibSrc}"
+            echo ""
+            echo "  Lag CLI dev environment loaded"
+            echo "  $(rustc --version)"
+            echo "  WebRTC prebuilt: ${webrtcTag}"
+            echo ""
           '';
         };
       }
