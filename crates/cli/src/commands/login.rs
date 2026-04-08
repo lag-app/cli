@@ -8,11 +8,15 @@ use anyhow::Result;
 
 pub async fn run() -> Result<()> {
     if let Some(creds) = config::load_credentials() {
+        if creds.pat.is_some() {
+            println!("Already logged in. Use `lag logout` first to switch accounts.");
+            return Ok(());
+        }
         if !auth::is_token_expired(&creds.access_token) {
             println!("Already logged in. Use `lag logout` first to switch accounts.");
             return Ok(());
         }
-        // Access token expired — try refreshing
+        // Access token expired - try refreshing
         match auth::refresh_token(&creds.refresh_token).await {
             Ok(_) => {
                 println!("Session refreshed. You are logged in.");

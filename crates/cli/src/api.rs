@@ -8,10 +8,9 @@ use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
 use serde::de::DeserializeOwned;
 use std::time::{Duration, Instant};
 
-// Refresh 5 minutes before expiry to avoid hitting 401
+// Legacy JWT refresh constants (used only when PAT is not available)
 const REFRESH_BUFFER: Duration = Duration::from_secs(300);
-// Supabase default token lifetime
-const TOKEN_LIFETIME: Duration = Duration::from_secs(28800);
+const TOKEN_LIFETIME: Duration = Duration::from_secs(3600); // Supabase default: 1 hour
 
 pub struct ApiClient {
     client: reqwest::Client,
@@ -28,29 +27,37 @@ impl ApiClient {
             client,
             base_url: cfg.effective_api_url(),
             creds,
-            token_acquired_at: None, // unknown age — will refresh on first API call
+            token_acquired_at: None,
         })
     }
 
     fn auth_headers(&self) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        if let Ok(val) = HeaderValue::from_str(&format!("Bearer {}", self.creds.access_token)) {
+        let token_str = if let Some(pat) = &self.creds.pat {
+            format!("Bearer {}", pat)
+        } else {
+            format!("Bearer {}", self.creds.access_token)
+        };
+        if let Ok(val) = HeaderValue::from_str(&token_str) {
             headers.insert(AUTHORIZATION, val);
         }
         headers
     }
 
-    /// Proactively refresh if the token is known to be near expiry.
-    /// For unknown-age tokens (loaded from disk), skip proactive refresh
-    /// and let the 401 retry handle it — avoids wiping fresh tokens.
+    fn uses_pat(&self) -> bool {
+        self.creds.pat.is_some()
+    }
+
+    /// Proactively refresh if using legacy JWT and the token is known to be near expiry.
     async fn ensure_fresh_token(&mut self) -> Result<()> {
+        if self.uses_pat() {
+            return Ok(());
+        }
         if let Some(acquired) = self.token_acquired_at {
             if acquired.elapsed() + REFRESH_BUFFER >= TOKEN_LIFETIME {
                 self.do_refresh().await?;
             }
         }
-        // If token_acquired_at is None, we don't know the age.
-        // Try the token as-is; the 401 handler in get/post will refresh if needed.
         Ok(())
     }
 
@@ -59,6 +66,16 @@ impl ApiClient {
         self.creds = refreshed;
         self.token_acquired_at = Some(Instant::now());
         Ok(())
+    }
+
+    async fn handle_unauthorized(&mut self) -> Result<()> {
+        if self.uses_pat() {
+            let _ = config::clear_credentials();
+            return Err(anyhow!(
+                "Token revoked or invalid. Run `lag login` to sign in again."
+            ));
+        }
+        self.do_refresh().await
     }
 
     pub async fn get<T: DeserializeOwned>(&mut self, path: &str) -> Result<T> {
@@ -72,7 +89,7 @@ impl ApiClient {
             .await?;
 
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-            self.do_refresh().await?;
+            self.handle_unauthorized().await?;
             let resp = self
                 .client
                 .get(&url)
@@ -82,8 +99,7 @@ impl ApiClient {
             return parse_response(resp).await;
         }
 
-        // Token works — mark acquisition time if unknown
-        if self.token_acquired_at.is_none() {
+        if self.token_acquired_at.is_none() && !self.uses_pat() {
             self.token_acquired_at = Some(Instant::now());
         }
 
@@ -106,7 +122,7 @@ impl ApiClient {
             .await?;
 
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-            self.do_refresh().await?;
+            self.handle_unauthorized().await?;
             let resp = self
                 .client
                 .post(&url)
@@ -131,7 +147,7 @@ impl ApiClient {
             .await?;
 
         if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
-            self.do_refresh().await?;
+            self.handle_unauthorized().await?;
             let resp = self
                 .client
                 .delete(&url)
@@ -155,7 +171,11 @@ impl ApiClient {
     }
 
     pub fn access_token(&self) -> &str {
-        &self.creds.access_token
+        if let Some(pat) = &self.creds.pat {
+            pat
+        } else {
+            &self.creds.access_token
+        }
     }
 
     pub fn base_url(&self) -> &str {

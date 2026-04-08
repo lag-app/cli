@@ -44,8 +44,12 @@ impl CliConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Credentials {
+    #[serde(default)]
     pub access_token: String,
+    #[serde(default)]
     pub refresh_token: String,
+    #[serde(default)]
+    pub pat: Option<String>,
 }
 
 pub fn config_dir() -> PathBuf {
@@ -124,11 +128,36 @@ mod tests {
         let creds = Credentials {
             access_token: "access_123".to_string(),
             refresh_token: "refresh_456".to_string(),
+            pat: None,
         };
         let json = serde_json::to_string(&creds).unwrap();
         let restored: Credentials = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.access_token, "access_123");
         assert_eq!(restored.refresh_token, "refresh_456");
+        assert!(restored.pat.is_none());
+    }
+
+    #[test]
+    fn credentials_serde_with_pat() {
+        let creds = Credentials {
+            access_token: String::new(),
+            refresh_token: String::new(),
+            pat: Some("lag_pat_abcd1234_secret".to_string()),
+        };
+        let json = serde_json::to_string(&creds).unwrap();
+        let restored: Credentials = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.pat.as_deref(), Some("lag_pat_abcd1234_secret"));
+        assert!(restored.access_token.is_empty());
+    }
+
+    #[test]
+    fn credentials_backward_compat_no_pat_field() {
+        // Old credential files without the pat field should deserialize fine
+        let json = r#"{"access_token":"abc","refresh_token":"def"}"#;
+        let creds: Credentials = serde_json::from_str(json).unwrap();
+        assert_eq!(creds.access_token, "abc");
+        assert_eq!(creds.refresh_token, "def");
+        assert!(creds.pat.is_none());
     }
 
     #[test]
